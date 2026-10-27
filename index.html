@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="en" data-fused-theme="shell">
+<head>
+<meta charset="utf-8" />
+<meta name="fused-app" />
+<meta name="fused-api-version" content="1" />
+<meta name="fused-app-id" content="terrain-glow-afaf33f6" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Terrain Glow</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --stage: #05070b;
+    --stage-text: #f6f2ea;
+    --stage-muted: rgba(246, 242, 234, 0.68);
+    --stage-faint: rgba(246, 242, 234, 0.42);
+    --panel: rgba(15, 18, 25, 0.86);
+    --panel-solid: #12161e;
+    --raise: rgba(255, 255, 255, 0.045);
+    --raise-2: rgba(255, 255, 255, 0.09);
+    --line: rgba(255, 255, 255, 0.08);
+    --line-2: rgba(255, 255, 255, 0.16);
+    --text: #eef0f4;
+    --muted: #9ba3b1;
+    --faint: #687180;
+    --accent: #ffb357;
+    --accent-2: #ff7d5a;
+    --accent-ink: #1d1206;
+    --accent-soft: rgba(255, 179, 87, 0.15);
+    --track: rgba(255, 255, 255, 0.12);
+    --shadow: rgba(0, 0, 0, 0.55);
+    --good: #7fe0a8;
+    --bad: #ff8a78;
+    --skeleton: rgba(255, 255, 255, 0.06);
+    --skeleton-hi: rgba(255, 255, 255, 0.14);
+    --panel-w: 334px;
+    --edge: 12px;
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --stage: #0b0e14;
+    --panel: rgba(251, 249, 245, 0.93);
+    --panel-solid: #fbf9f5;
+    --raise: rgba(20, 24, 33, 0.04);
+    --raise-2: rgba(20, 24, 33, 0.08);
+    --line: rgba(20, 24, 33, 0.09);
+    --line-2: rgba(20, 24, 33, 0.18);
+    --text: #1b1f28;
+    --muted: #5d6573;
+    --faint: #8b929e;
+    --accent: #d9711b;
+    --accent-2: #c9472c;
+    --accent-ink: #ffffff;
+    --accent-soft: rgba(217, 113, 27, 0.13);
+    --track: rgba(20, 24, 33, 0.13);
+    --shadow: rgba(10, 14, 22, 0.28);
+    --good: #2f9a5e;
+    --bad: #c8412f;
+    --skeleton: rgba(20, 24, 33, 0.06);
+    --skeleton-hi: rgba(20, 24, 33, 0.12);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; overflow: hidden; background: var(--stage); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px; -webkit-font-smoothing: antialiased;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; margin: 0; }
+  button { background: none; border: 0; padding: 0; cursor: pointer; }
+  ::placeholder { color: var(--muted); opacity: 1; }
+  input, select, textarea, progress { accent-color: var(--accent); }
+  img, svg, video, canvas { display: block; max-width: 100%; }
+  .scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .noselect { -webkit-user-select: none; user-select: none; }
+  .serif { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+
+  #stage { position: fixed; inset: 0; background: var(--stage); overflow: hidden; }
+  #backdrop { position: absolute; inset: -80px; width: calc(100% + 160px); height: calc(100% + 160px); max-width: none; -webkit-filter: blur(60px) saturate(1.35); filter: blur(60px) saturate(1.35); opacity: 0.55; }
+  #stageInner { position: absolute; inset: 0; right: calc(var(--panel-w) + var(--edge) + 10px); transition: right 0.35s ease; container: stage / size; }
+  body.panel-off #stageInner { right: 0; }
+  #frame { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 6px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06); transition: opacity 0.4s ease; }
+  #gl { width: 100%; height: 100%; touch-action: none; transition: -webkit-filter 0.6s ease, filter 0.6s ease; }
+  body.loading #gl { -webkit-filter: blur(5px) brightness(0.55) saturate(0.7); filter: blur(5px) brightness(0.55) saturate(0.7); }
+  body.view-3d #gl { cursor: -webkit-grab; cursor: grab; }
+  body.view-3d #gl.drag { cursor: -webkit-grabbing; cursor: grabbing; }
+  body.view-map #frame, body.view-map #backdrop { opacity: 0; pointer-events: none; }
+  body.view-map #stageInner { pointer-events: none; }
+
+  #cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 calc(var(--cs, 1) * 36px) calc(var(--cs, 1) * 14px); background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.62)); color: #f6f2ea; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5); display: none; padding-top: calc(var(--cs, 1) * 70px); pointer-events: none; }
+  body.cap-on #cap { display: block; }
+  body.loading #cap { display: none; }
+  #cap [contenteditable] { pointer-events: auto; outline: none; border-radius: 4px; cursor: text; white-space: nowrap; overflow: hidden; text-overflow: clip; transition: box-shadow 0.15s, background 0.15s; }
+  #cap [contenteditable]:hover { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45); }
+  #cap [contenteditable]:focus { box-shadow: 0 0 0 1.5px var(--accent); background: rgba(0, 0, 0, 0.25); text-overflow: clip; }
+  #cap .ct { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; font-weight: 600; font-size: calc(var(--cs, 1) * 46px); line-height: 1.15; }
+  #cap .cs, #cap .cc { white-space: normal !important; line-height: 1.3; }
+  #cap .cs { font-weight: 500; font-size: calc(var(--cs, 1) * 17px); color: rgba(246, 242, 234, 0.85); margin-top: calc(var(--cs, 1) * 4px); }
+  #cap .cc { font-weight: 500; font-size: calc(var(--cs, 1) * 12px); color: rgba(246, 242, 234, 0.62); margin-top: calc(var(--cs, 1) * 6px); }
+
+  #map { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.35s ease; }
+  body.view-map #map { opacity: 1; pointer-events: auto; }
+  #mapFrame { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border: 1.5px solid rgba(255, 255, 255, 0.92); border-radius: 4px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(5, 7, 11, 0.42); display: none; }
+  body.view-map #mapFrame { display: block; }
+  #mapFrame .lbl { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); background: rgba(5, 7, 11, 0.78); color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  #mapFrame .lbl.warn { color: #ffcf8a; }
+  #mapBar { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); display: none; gap: 8px; align-items: center; }
+  body.view-map #mapBar { display: flex; }
+
+  .overlay { position: absolute; pointer-events: none; color: var(--stage-text); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6); }
+  .overlay * { pointer-events: auto; }
+  #titleBox { left: 26px; top: 18px; max-width: min(520px, 46%); }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--stage-muted); }
+  .brand img { width: 18px; height: 18px; border-radius: 5px; }
+  #placeName { font-size: 30px; line-height: 1.08; font-weight: 600; margin-top: 8px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  #placeSub { margin-top: 5px; color: var(--stage-muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 3px 12px; }
+  #placeSub span { white-space: nowrap; }
+  #viewSwitch { top: 18px; right: 22px; }
+  .seg-stage { display: flex; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(8, 10, 15, 0.62); border: 1px solid rgba(255, 255, 255, 0.1); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); text-shadow: none; }
+  .seg-stage button { padding: 6px 13px; border-radius: 999px; color: rgba(246, 242, 234, 0.7); font-weight: 600; font-size: 12px; display: flex; align-items: center; gap: 6px; transition: background 0.2s, color 0.2s; }
+  .seg-stage button:hover { color: #fff; }
+  .seg-stage button.on { background: rgba(255, 255, 255, 0.16); color: #fff; }
+  .seg-stage svg { width: 14px; height: 14px; }
+  #tileChip { left: 50%; top: 64px; transform: translateX(-50%); display: none; padding: 6px 12px 6px 30px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(8, 10, 15, 0.72); border: 1px solid rgba(255, 255, 255, 0.12); text-shadow: none; white-space: nowrap; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  #tileChip::before { content: ""; position: absolute; left: 11px; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.2); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  body.partial #tileChip { display: block; }
+  #hint3d { left: 50%; bottom: 10px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); text-align: center; font-size: 11.5px; color: var(--stage-muted); display: none; }
+  body.view-3d #hint3d { display: block; }
+  body.view-3d.cap-on #hint3d { display: none; }
+  #panelToggle { right: 14px; bottom: 14px; display: none; }
+  body.panel-off #panelToggle { display: block; }
+  .chipbtn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; font-weight: 600; font-size: 12.5px; background: rgba(8, 10, 15, 0.7); color: #fff; border: 1px solid rgba(255, 255, 255, 0.14); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); text-shadow: none; white-space: nowrap; }
+  .chipbtn:hover { background: rgba(20, 24, 33, 0.85); }
+  .chipbtn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .chipbtn.primary:hover { filter: brightness(1.08); }
+  .chipbtn:disabled { opacity: 0.5; cursor: default; }
+  .chipbtn svg { width: 14px; height: 14px; }
+
+  #loading { left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(300px, calc(100% - 28px)); padding: 18px 20px 16px; border-radius: 14px; background: rgba(8, 10, 15, 0.74); border: 1px solid rgba(255, 255, 255, 0.1); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); text-shadow: none; display: none; }
+  body.loading #loading { display: block; }
+  body.view-map #loading { display: none; }
+  #loading h4 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  #loading .sub { color: var(--stage-muted); font-size: 12px; margin-bottom: 12px; }
+  .step { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 12.5px; color: var(--stage-muted); }
+  .step .ic { width: 16px; height: 16px; flex: none; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.18); }
+  .step.run .ic { border-color: rgba(255, 255, 255, 0.15); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  .step.done .ic { border: 0; background: var(--good); -webkit-mask: radial-gradient(circle, #000 60%, transparent 62%); mask: radial-gradient(circle, #000 60%, transparent 62%); }
+  .step.err .ic { border-color: var(--bad); background: var(--bad); }
+  .step.done { color: var(--stage-text); }
+  .step > span:nth-child(2) { flex: 1; min-width: 0; }
+  .step .t { flex: none; min-width: 48px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--stage-faint); }
+  .bar { height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; width: 40%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 3px; animation: slide 1.6s ease-in-out infinite; }
+  #loadErr { display: none; margin-top: 10px; color: #ffb3a6; font-size: 12px; line-height: 1.45; }
+  #loadErr.on { display: block; }
+  #loadErr button { margin-top: 10px; }
+  #loginBox { display: none; }
+  body.login #loginBox { display: flex; }
+  body.login .step, body.login #loading:not([data-login="cancel"]) #loadBar { display: none; }
+  body.login #loadBar { margin: 0 0 12px; }
+  #loginBox .chipbtn { display: none; }
+  #loading[data-login="signIn"] #signIn, #loading[data-login="cancel"] #loginCancel, #loading[data-login="retry"] #loginRetry { display: inline-flex; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(260%); } }
+
+  #panel { position: fixed; top: var(--edge); right: var(--edge); bottom: var(--edge); width: var(--panel-w); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; -webkit-backdrop-filter: blur(22px) saturate(1.2); backdrop-filter: blur(22px) saturate(1.2); box-shadow: 0 20px 60px var(--shadow); transition: transform 0.35s ease, opacity 0.35s ease; z-index: 5; }
+  body.panel-off #panel { transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; }
+  #panel header { display: flex; align-items: center; gap: 6px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--line); }
+  .search { position: relative; flex: 1; min-width: 0; }
+  .search input { width: 100%; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--raise); padding: 0 10px 0 32px; outline: none; transition: border-color 0.15s, background 0.15s; -webkit-appearance: none; appearance: none; }
+  .search input:focus { border-color: var(--accent); background: var(--raise-2); }
+  .search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
+  .pop { position: absolute; left: 10px; right: 10px; top: 52px; z-index: 10; display: none; background: var(--panel-solid); border: 1px solid var(--line-2); border-radius: 12px; padding: 4px; box-shadow: 0 18px 40px var(--shadow); max-height: min(520px, calc(100% - 62px)); overflow-y: auto; }
+  .pop.on { display: block; }
+  .pop button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 9px; border-radius: 8px; }
+  .pop button:hover, .pop button.sel { background: var(--accent-soft); }
+  .pop button.on .n { color: var(--accent); }
+  .pop .n { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop .d { color: var(--muted); font-size: 11.5px; margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pop .grow { min-width: 0; }
+  .pop .km { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .pop .grp { padding: 8px 9px 3px; font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+  .pop .empty { padding: 10px; color: var(--muted); }
+  .kind { width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .kind svg { width: 17px; height: 17px; }
+  .iconbtn { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
+  .iconbtn:hover, .iconbtn.on { background: var(--raise-2); color: var(--text); }
+  .iconbtn svg { width: 17px; height: 17px; }
+  #panelBody { flex: 1; min-height: 0; overflow-y: auto; }
+  section { padding: 8px 14px 10px; border-bottom: 1px solid var(--line); }
+  section h3 { margin: 0 0 6px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); display: flex; align-items: center; gap: 8px; }
+  section h3 .r { margin-left: auto; letter-spacing: 0; text-transform: none; font-weight: 500; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .stack > * + * { margin-top: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--muted); }
+  .seg { display: flex; padding: 2px; border-radius: 10px; background: var(--raise); border: 1px solid var(--line); }
+  .seg button { flex: 1; padding: 5px 4px; border-radius: 8px; font-weight: 600; font-size: 11.5px; color: var(--muted); white-space: nowrap; transition: background 0.15s, color 0.15s; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { background: var(--panel-solid); color: var(--text); box-shadow: 0 1px 3px var(--shadow); }
+  .seg.small button { font-size: 11px; padding: 4px 1px; text-overflow: clip; }
+  .lab { font-size: 10.5px; color: var(--faint); font-weight: 600; margin-bottom: 4px; }
+  .ratios { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .ratio { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 5px; border-radius: 9px; border: 1px solid transparent; color: var(--muted); font-size: 10.5px; font-weight: 600; transition: background 0.15s, border-color 0.15s; }
+  .ratio:hover { background: var(--raise-2); color: var(--text); }
+  .ratio.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  .ratio i { display: block; border: 1.5px solid currentColor; border-radius: 2.5px; }
+  .ratio.on i { border-color: var(--accent); }
+  .field { height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--raise); padding: 0 9px; outline: none; min-width: 0; }
+  .field:focus { border-color: var(--accent); }
+  select.field, .field.pick { -webkit-appearance: none; appearance: none; padding-right: 26px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; background-size: 12px; cursor: pointer; }
+  input[type=date].field { font-variant-numeric: tabular-nums; }
+  .scenes { display: flex; gap: 5px; overflow-x: auto; padding: 1px 1px 4px; }
+  .scene { flex: none; padding: 4px 8px; border-radius: 999px; background: var(--raise); border: 1px solid var(--line); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scene:hover { border-color: var(--line-2); }
+  .scene.on { border-color: var(--accent); background: var(--accent-soft); }
+  .scene em { font-style: normal; color: var(--muted); margin-left: 4px; }
+  .scene.clear em { color: var(--good); }
+  .skel { flex: none; height: 24px; border-radius: 999px; width: 74px; background: linear-gradient(90deg, var(--skeleton) 0, var(--skeleton-hi) 50%, var(--skeleton) 100%); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  .lightbox { display: flex; gap: 12px; align-items: center; }
+  #dial { width: 94px; height: 94px; flex: none; touch-action: none; cursor: -webkit-grab; cursor: grab; outline: none; }
+  #dial:focus-visible .ring { stroke: var(--accent); }
+  #dial .ring { fill: var(--raise); stroke: var(--line-2); stroke-width: 1; }
+  #dial .band { fill: none; stroke: var(--track); stroke-width: 10; }
+  #dial .tick { stroke: var(--faint); stroke-width: 1.2; }
+  #dial .tk { fill: var(--faint); font-size: 8.5px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+  #dial .ray { stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; }
+  #dial .sun { fill: var(--accent); stroke: var(--panel-solid); stroke-width: 2; }
+  #dial .glow { fill: var(--accent); opacity: 0.22; }
+  #dial .val { fill: var(--text); font-size: 12px; font-weight: 700; text-anchor: middle; }
+  #dial .val2 { fill: var(--muted); font-size: 8.5px; font-weight: 600; text-anchor: middle; }
+  .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .preset { display: flex; align-items: center; gap: 6px; padding: 5px 7px; border-radius: 8px; background: var(--raise); border: 1px solid transparent; font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; min-width: 0; }
+  .preset:hover { color: var(--text); background: var(--raise-2); }
+  .preset.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+  .preset svg { width: 14px; height: 14px; flex: none; color: var(--accent); }
+  .looks { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+  .look { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  .look i { display: block; width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); transition: border-color 0.15s, transform 0.15s; }
+  .look:hover i { transform: scale(1.06); }
+  .look.on { color: var(--text); }
+  .look.on i { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 10px; font-weight: 600; background: var(--raise-2); border: 1px solid var(--line); transition: filter 0.15s, background 0.15s; white-space: nowrap; }
+  .btn:hover { background: var(--line-2); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.rec { position: relative; overflow: hidden; }
+  .btn.rec .prog { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent-2); }
+  .btn.rec.on { color: var(--bad); }
+  .btn.rec .i-stop, .btn.rec.on .i-rec { display: none; }
+  .btn.rec.on .i-stop { display: block; }
+  .field.pick { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field.pick:disabled { opacity: 0.5; cursor: default; }
+  #clipBtn { flex: none; }
+  .trio { gap: 6px; }
+  .trio > * { flex: 1 1 auto; min-width: 0; }
+  .trio .seg button { flex: 1 1 auto; }
+  .anchor { position: relative; }
+  .menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 10; display: none; background: var(--panel-solid); border: 1px solid var(--line-2); border-radius: 12px; padding: 10px; box-shadow: 0 18px 40px var(--shadow); }
+  .menu.on { display: block; }
+  .menu .seg + .lab { margin-top: 9px; }
+  .note { font-size: 11px; color: var(--faint); line-height: 1.4; }
+  .note button, section h3 .r button { color: var(--accent); font-weight: 600; font-size: 11px; }
+  details.fine { border-bottom: 1px solid var(--line); }
+  details.fine summary { list-style: none; cursor: pointer; padding: 9px 14px; font-size: 11.5px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  details.fine summary::-webkit-details-marker { display: none; }
+  details.fine summary svg { width: 12px; height: 12px; transition: transform 0.2s; }
+  details.fine[open] summary svg { transform: rotate(90deg); }
+  details.fine summary:hover { color: var(--text); }
+  .fineBody { padding: 0 14px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .ctl .lab2 { display: flex; justify-content: space-between; align-items: baseline; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+  .ctl .lab2 .v { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 16px; background: transparent; cursor: pointer; display: block; }
+  input[type=range]:focus { outline: none; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--accent) 0, var(--accent) var(--p, 50%), var(--track) var(--p, 50%)); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 4px; background: var(--track); }
+  input[type=range]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--accent); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.35); }
+  input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 0; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.35); }
+  input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
+  input[type=range]:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
+  .switch { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font-size: 11.5px; color: var(--muted); }
+  .switch .sw { margin-left: auto; width: 30px; height: 17px; border-radius: 999px; background: var(--track); position: relative; flex: none; transition: background 0.2s; }
+  .switch .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); transition: transform 0.2s; }
+  .switch[aria-checked="true"] .sw { background: var(--accent); }
+  .switch[aria-checked="true"] .sw::after { transform: translateX(13px); }
+  .kbd { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line-2); font-size: 10.5px; font-family: ui-monospace, Menlo, Consolas, monospace; text-align: center; color: var(--muted); }
+  #panel footer { padding: 8px 14px; border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); }
+  #panel footer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #panel footer button { color: var(--muted); }
+
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px); opacity: 0; z-index: 20; background: rgba(8, 10, 15, 0.9); color: #fff; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 10px 14px; font-size: 12.5px; width: max-content; max-width: min(520px, calc(100% - 24px)); transition: opacity 0.25s, transform 0.25s; pointer-events: none; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  #toast a { color: #ffcf8a; }
+  #help { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(5, 7, 11, 0.6); }
+  #help.on { display: grid; }
+  #help .card { width: 380px; max-width: calc(100% - 32px); background: var(--panel-solid); color: var(--text); border: 1px solid var(--line-2); border-radius: 16px; padding: 18px 20px; box-shadow: 0 30px 80px var(--shadow); }
+  #help h4 { margin: 0 0 12px; font-size: 15px; }
+  #help .k { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; align-items: center; }
+  #help .k span:nth-child(odd) { color: var(--muted); }
+
+  #preview { position: fixed; inset: 0; display: none; background: radial-gradient(120% 90% at 70% 10%, #2b2440 0%, #121726 45%, #07090d 100%); }
+  body.preview #preview { display: block; }
+  body.preview #stage, body.preview #panel { display: none; }
+  #preview svg { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 70%; }
+  #preview .t { position: absolute; left: 28px; top: 26px; color: #f6f2ea; }
+  #preview .t b { display: block; font-size: 34px; font-weight: 600; }
+  #preview .t span { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.7; }
+
+  @container stage (max-width: 600px) {
+    #titleBox { left: 14px; top: 12px; max-width: calc(100% - 150px); }
+    #placeName { font-size: 22px; margin-top: 4px; }
+    #viewSwitch { top: 12px; right: 10px; }
+    .seg-stage button { padding: 7px 10px; }
+    .seg-stage button span { display: none; }
+  }
+  @container stage (max-width: 320px) {
+    #titleBox { top: 54px; max-width: calc(100% - 28px); }
+  }
+  @container stage (max-height: 480px) {
+    .brand, #placeSub { display: none; }
+    #placeName { margin-top: 0; }
+  }
+  @media (pointer: coarse) {
+    .seg button { padding: 8px 4px; }
+    .seg.small button { padding: 8px 1px; }
+    .preset { padding: 8px 7px; }
+    .field { height: 36px; padding-left: 8px; }
+    select.field, .field.pick { padding-right: 20px; background-position: right 6px center; }
+    .btn { height: 40px; }
+    .iconbtn { width: 38px; height: 38px; }
+    .search input { height: 38px; }
+    .scene { padding: 7px 10px; }
+    .switch { padding: 6px 0; }
+    details.fine summary { padding: 12px 14px; }
+    input[type=range] { height: 28px; }
+    input[type=range]::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8px; }
+    input[type=range]::-moz-range-thumb { width: 20px; height: 20px; }
+    input, select, textarea { font-size: 16px; }
+  }
+  @media (hover: none) {
+    #helpBtn { display: none; }
+  }
+  @media (max-height: 520px) {
+    :root { --panel-w: 320px; --edge: 8px; }
+  }
+  @media (max-width: 760px) and (orientation: portrait) {
+    :root { --sheet: min(52%, calc(100% - 238px)); }
+    #panel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: var(--sheet); }
+    body.panel-off #panel { transform: translateY(calc(100% + 24px)); }
+    #stageInner { right: 0; bottom: calc(var(--sheet-h, var(--sheet)) + 8px); transition: bottom 0.35s ease; }
+    body.panel-off #stageInner { bottom: 0; }
+    #hidePanel svg { transform: rotate(90deg); }
+  }
+  @media (min-width: 620px) and (max-width: 760px) and (orientation: portrait) {
+    :root { --sheet: min(60%, calc(100% - 238px)); }
+    #panelBody { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+    .col { min-width: 0; }
+    .col + .col { border-left: 1px solid var(--line); }
+    .col > :last-child { border-bottom: 0; }
+    section { padding: 7px 14px 8px; }
+    section h3 { margin-bottom: 4px; }
+    .stack > * + * { margin-top: 6px; }
+    .ratio { padding: 5px 0 4px; }
+    #dial { width: 84px; height: 84px; }
+    #fine { grid-column: 1 / -1; border-top: 1px solid var(--line); border-bottom: 0; }
+    .fineBody { grid-template-columns: repeat(5, 1fr); }
+    .fineBody > :empty { display: none; }
+    #multi { grid-column: span 2; }
+  }
+  .maplibregl-ctrl-attrib { background: rgba(5, 7, 11, 0.6) !important; color: rgba(255, 255, 255, 0.7) !important; }
+  .maplibregl-ctrl-attrib a { color: rgba(255, 255, 255, 0.8) !important; }
+  .maplibregl-ctrl-attrib-button { filter: invert(1); }
+</style>
+</head>
+<body class="loading">
+<div id="preview">
+  <svg viewBox="0 0 800 400" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="pvA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd59a"/><stop offset="1" stop-color="#7a5a8c"/></linearGradient>
+      <linearGradient id="pvB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3f66"/><stop offset="1" stop-color="#0e121c"/></linearGradient>
+    </defs>
+    <circle cx="610" cy="70" r="26" fill="#ffb357" opacity="0.9"/>
+    <path d="M0 400 L0 250 L120 170 L210 230 L330 90 L430 200 L520 140 L640 240 L800 160 L800 400 Z" fill="url(#pvB)"/>
+    <path d="M330 90 L430 200 L520 140 L470 260 L360 250 Z" fill="url(#pvA)" opacity="0.85"/>
+    <path d="M0 400 L0 320 L160 260 L300 330 L460 280 L620 340 L800 290 L800 400 Z" fill="#07090d" opacity="0.85"/>
+  </svg>
+  <div class="t serif"><span>Terrain Glow</span><b>Shaded relief explorer</b></div>
+</div>
+
+<div id="stage">
+  <canvas id="backdrop" width="64" height="64" aria-hidden="true"></canvas>
+  <div id="map"></div>
+  <div id="stageInner">
+    <div id="frame">
+      <canvas id="gl" width="512" height="512"></canvas>
+      <div id="cap" aria-label="Caption">
+        <div class="ct" contenteditable="true" spellcheck="false" data-k="ct" title="Click to edit the title"></div>
+        <div class="cs" contenteditable="true" spellcheck="false" data-k="cs" title="Click to edit the subtitle"></div>
+        <div class="cc" contenteditable="true" spellcheck="false" data-k="cc" title="Click to edit the credit"></div>
+      </div>
+    </div>
+    <div id="mapFrame"><div class="lbl" id="mapLbl"></div></div>
+    <div class="overlay" id="mapBar">
+      <button class="chipbtn" id="mapCancel">Cancel</button>
+      <button class="chipbtn primary" id="mapUse"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.5 12 13 4.5"/></svg>Render this area</button>
+    </div>
+    <div class="overlay" id="titleBox">
+      <div class="brand"><img id="brandIcon" alt="" />Terrain Glow</div>
+      <div id="placeName" class="serif"></div>
+      <div id="placeSub"></div>
+    </div>
+    <div class="overlay" id="viewSwitch">
+      <div class="seg-stage noselect" role="tablist" aria-label="View">
+        <button data-view="relief" role="tab" aria-label="Relief" title="Relief (V)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 13.5 6 6l3 4 2-2.5 3.5 6z"/></svg><span>Relief</span></button>
+        <button data-view="3d" role="tab" aria-label="3D" title="3D (T)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M8 1.8 14 5v6l-6 3.2L2 11V5z"/><path d="M2 5l6 3.2L14 5M8 8.2v6"/></svg><span>3D</span></button>
+        <button data-view="map" role="tab" aria-label="Map" title="Map (M)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 3.5 5.5 2l5 1.8 4-1.5v10.2l-4 1.5-5-1.8-4 1.5z"/><path d="M5.5 2v10.2M10.5 3.8V14"/></svg><span>Map</span></button>
+      </div>
+    </div>
+    <div class="overlay" id="loading" role="status" aria-live="polite">
+      <h4 id="loadTitle">Loading terrain</h4>
+      <div class="sub" id="loadSub">Copernicus DEM and Sentinel-2 on Fused</div>
+      <div class="step" id="stepDem"><span class="ic"></span><span id="stepDemLabel">Elevation · DEM 30&nbsp;m</span><span class="t"></span></div>
+      <div class="step" id="stepImg"><span class="ic"></span><span id="stepImgLabel">Sentinel-2 imagery</span><span class="t"></span></div>
+      <div class="bar" id="loadBar"><i></i></div>
+      <div id="loadErr"><div id="loadErrMsg"></div><button class="chipbtn primary" id="retry">Try again</button></div>
+      <div id="loginBox">
+        <button class="chipbtn primary" id="signIn">Sign in</button>
+        <button class="chipbtn" id="loginCancel">Cancel</button>
+        <button class="chipbtn primary" id="loginRetry">Try again</button>
+      </div>
+    </div>
+    <div class="overlay" id="tileChip" role="status" aria-live="polite"></div>
+    <div class="overlay" id="hint3d">Drag to orbit. Pinch or scroll to zoom.</div>
+  </div>
+  <div class="overlay" id="panelToggle"><button class="chipbtn" id="showPanel" title="Show controls (H)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>Controls</button></div>
+</div>
+
+<aside id="panel" aria-label="Controls">
+  <header>
+    <div class="search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="7" cy="7" r="4.8"/><path d="m10.6 10.6 3.4 3.4"/></svg>
+      <input id="q" type="search" placeholder="Search a place" autocomplete="off" spellcheck="false" aria-label="Search a place" />
+    </div>
+    <button class="iconbtn" id="placesBtn" title="Famous places (P)" aria-haspopup="listbox" aria-expanded="false"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 13.5 6.5 4l2.6 4.6L11 6l3.5 7.5z"/><path d="m5 7 1.5 1.3L8 7"/></svg></button>
+    <button class="iconbtn" id="pickMap" title="Pick an area on the map (M)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 3.5 5.5 2l5 1.8 4-1.5v10.2l-4 1.5-5-1.8-4 1.5z"/><path d="M5.5 2v10.2M10.5 3.8V14"/></svg></button>
+    <button class="iconbtn" id="hidePanel" title="Hide controls (H)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg></button>
+    <div id="results" class="pop scroll" role="listbox" aria-label="Search results"></div>
+    <div id="placesPop" class="pop scroll" role="listbox" aria-label="Famous places"></div>
+  </header>
+  <div id="panelBody" class="scroll">
+    <div class="col">
+    <section>
+      <h3>Frame <span class="r" id="resInfo"></span></h3>
+      <div class="ratios" id="ratios"></div>
+    </section>
+    <section class="stack">
+      <h3>Imagery</h3>
+      <div class="seg" id="layerSeg">
+        <button data-v="true" title="True colour (1)">Natural</button>
+        <button data-v="false" title="False colour with near infrared (2)">Infrared</button>
+        <button data-v="ndvi" title="Vegetation glow from NDVI (3)">NDVI glow</button>
+        <button data-v="relief" title="Relief only, colour by height (4)">Relief</button>
+      </div>
+      <div class="seg" id="compSeg">
+        <button data-v="lc" title="Least-cloudy mosaic: clearest pixels from the clearest scenes, clouds removed. Two tiles can show two dates">Mosaic</button>
+        <button data-v="day" title="The clearest day that covers all of the frame. Small gaps fill from other days">Best day</button>
+        <button data-v="median" title="Median of clear pixels over the date range">Median</button>
+        <button data-v="single" title="One acquisition date">Single date</button>
+      </div>
+      <div class="row">
+        <select class="field grow" id="season" aria-label="Date range">
+          <option value="summer">Last summer</option>
+          <option value="winter">Last winter</option>
+          <option value="year">Last 12 months</option>
+          <option value="custom">Custom dates</option>
+        </select>
+        <select class="field" id="quality" aria-label="Quality" title="Quality">
+          <option value="preview">Preview, fast</option>
+          <option value="high">High</option>
+          <option value="print">Print, largest</option>
+        </select>
+      </div>
+      <div class="row" id="customRow">
+        <input class="field grow" type="date" id="start" aria-label="Start date" />
+        <span class="muted">to</span>
+        <input class="field grow" type="date" id="end" aria-label="End date" />
+      </div>
+      <div id="sceneBox">
+        <div class="note" id="sceneHead">Scenes in the date range</div>
+        <div class="scenes scroll" id="scenes" style="margin-top:6px"></div>
+      </div>
+    </section>
+    <section>
+      <h3>Look</h3>
+      <div class="looks" id="looks"></div>
+    </section>
+    </div>
+    <div class="col">
+    <section>
+      <h3>Light <span class="r" id="lightInfo"></span></h3>
+      <div class="lightbox">
+        <svg id="dial" viewBox="0 0 108 108" role="slider" aria-label="Sun direction" aria-valuemin="0" aria-valuemax="360" tabindex="0">
+          <circle class="ring" cx="54" cy="54" r="52" />
+          <circle class="band" cx="54" cy="54" r="45" />
+          <g id="dialTicks"></g>
+          <text class="tk" x="54" y="17">N</text><text class="tk" x="91" y="54">E</text><text class="tk" x="54" y="91">S</text><text class="tk" x="17" y="54">W</text>
+          <line class="ray" id="dialRay" x1="54" y1="54" x2="54" y2="9" />
+          <circle class="glow" id="dialGlow" cx="54" cy="9" r="10" />
+          <circle class="sun" id="dialSun" cx="54" cy="9" r="6.5" />
+          <text class="val" id="dialVal" x="54" y="55">315°</text>
+          <text class="val2" id="dialVal2" x="54" y="67">NW</text>
+        </svg>
+        <div class="grow">
+          <div class="presets" id="lightPresets"></div>
+        </div>
+      </div>
+      <div class="row trio" style="margin-top:10px">
+        <div><div class="lab">Sun height</div><div class="seg small" id="altSeg"><button data-v="12">Low</button><button data-v="35">Mid</button><button data-v="60">High</button></div></div>
+        <div><div class="lab">Relief</div><div class="seg small" id="strSeg"><button data-v="0.55">Soft</button><button data-v="0.8">Mid</button><button data-v="1">Strong</button></div></div>
+        <div><div class="lab">Height</div><div class="seg small" id="exagSeg"><button data-v="1">1×</button><button data-v="2">2×</button><button data-v="3">3×</button></div></div>
+      </div>
+    </section>
+    <section class="stack">
+      <h3>Export <span class="r" id="capNote"></span></h3>
+      <div class="row anchor">
+        <div class="menu" id="clipMenu" role="dialog" aria-label="Clip settings">
+          <div class="lab">Motion</div>
+          <div class="seg" id="clipSeg"><button data-v="orbit">3D orbit</button><button data-v="sweep">Light sweep</button></div>
+          <div class="lab">Length</div>
+          <div class="seg" id="durSeg"><button data-v="5">5 s</button><button data-v="10">10 s</button><button data-v="15">15 s</button><button data-v="30">30 s</button></div>
+        </div>
+        <button class="btn primary grow" id="savePng" title="Save a PNG (S)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="2"/><circle cx="6" cy="7" r="1.4"/><path d="m2.5 12 3.8-3.3 2.7 2.2 2-1.6 2.5 2.2"/></svg>Save image</button>
+        <button class="btn rec grow" id="recClip" title="Record a clip (R)"><svg class="i-rec" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="4.5"/></svg><svg class="i-stop" viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="4" width="8" height="8" rx="1.5"/></svg><span id="recLabel">Record clip</span><span class="prog" id="recProg"></span></button>
+      </div>
+      <div class="row">
+        <select class="field grow" id="out" aria-label="Image size" title="Image size in pixels"><option value="social" id="outSocial">Social size</option><option value="full" id="outFull">Full resolution</option></select>
+        <button class="field grow pick" id="clipBtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="clipMenu" title="Clip motion and length"><span id="clipInfo">Orbit · 10 s</span></button>
+        <button class="iconbtn" id="capSwitch" role="switch" aria-checked="true" title="Caption on the image"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="1.5" y="3" width="13" height="10" rx="2"/><path d="M4.5 10h5M4.5 7.5h7"/></svg></button>
+      </div>
+    </section>
+    </div>
+    <details class="fine" id="fine">
+      <summary><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m4.5 2.5 3.5 3.5-3.5 3.5"/></svg>Fine-tune</summary>
+      <div class="fineBody">
+        <div class="ctl"><div class="lab2"><span>Azimuth</span><span class="v" id="azV"></span></div><input type="range" id="az" min="0" max="360" step="1" aria-label="Light azimuth" /></div>
+        <div class="ctl"><div class="lab2"><span>Sun height</span><span class="v" id="altV"></span></div><input type="range" id="alt" min="3" max="85" step="1" aria-label="Sun altitude" /></div>
+        <div class="ctl"><div class="lab2"><span>Relief</span><span class="v" id="strV"></span></div><input type="range" id="str" min="0" max="1" step="0.01" aria-label="Relief strength" /></div>
+        <div class="ctl"><div class="lab2"><span>Height</span><span class="v" id="exagV"></span></div><input type="range" id="exag" min="0.5" max="5" step="0.1" aria-label="Vertical exaggeration" /></div>
+        <div class="ctl"><div class="lab2"><span>Glow</span><span class="v" id="glowV"></span></div><input type="range" id="glow" min="0" max="1" step="0.01" aria-label="Glow" /></div>
+        <div class="ctl"><div class="lab2"><span>Saturation</span><span class="v" id="satV"></span></div><input type="range" id="sat" min="0" max="2" step="0.01" aria-label="Saturation" /></div>
+        <div class="ctl"><div class="lab2"><span>Exposure</span><span class="v" id="expV"></span></div><input type="range" id="exp" min="0.5" max="2" step="0.01" aria-label="Exposure" /></div>
+        <div></div>
+        <button class="switch" id="multi" role="switch" aria-checked="false">Multi-directional light<span class="sw"></span></button>
+        <button class="switch" id="shadow" role="switch" aria-checked="false">Cast shadows<span class="sw"></span></button>
+      </div>
+    </details>
+  </div>
+  <footer>
+    <span class="grow" id="footInfo">Copernicus DEM · Sentinel-2 L2A · Fused</span>
+    <button id="helpBtn" title="Keyboard shortcuts (?)"><span class="kbd">?</span></button>
+  </footer>
+</aside>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="help" role="dialog" aria-label="Keyboard shortcuts">
+  <div class="card">
+    <h4>Keyboard shortcuts</h4>
+    <div class="k">
+      <span>Turn the sun</span><span><span class="kbd">←</span> <span class="kbd">→</span></span>
+      <span>Raise or lower the sun</span><span><span class="kbd">↑</span> <span class="kbd">↓</span></span>
+      <span>Height</span><span><span class="kbd">[</span> <span class="kbd">]</span></span>
+      <span>Imagery layer</span><span><span class="kbd">1</span>–<span class="kbd">4</span></span>
+      <span>Next look</span><span class="kbd">L</span>
+      <span>Relief, 3D, map</span><span><span class="kbd">V</span> <span class="kbd">T</span> <span class="kbd">M</span></span>
+      <span>Famous places</span><span class="kbd">P</span>
+      <span>Save image, record or stop clip</span><span><span class="kbd">S</span> <span class="kbd">R</span></span>
+      <span>Show or hide controls</span><span class="kbd">H</span>
+      <span>Search</span><span class="kbd">/</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  function isPreview() {
+    if (new URLSearchParams(location.search).get("_preview") === "1") return true;
+    try {
+      let w = window;
+      while (w.parent && w.parent !== w) {
+        w = w.parent;
+        if (new URLSearchParams(w.location.search).get("_preview") === "1") return true;
+      }
+    } catch (e) { }
+    return false;
+  }
+
+  if (isPreview()) {
+    document.body.className = "preview";
+    return;
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const P = fused.params;
+
+  const ICONS = {
+    peak: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 13.5 6.5 4l2.6 4.6L11 6l3.5 7.5z"/><path d="m5 7 1.5 1.3L8 7"/></svg>',
+    volcano: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M1.5 13.5 6 6.5h4l4.5 7z"/><path d="M7 4 6.3 2.3M9 4l.7-1.7M8 3.6V1.6"/></svg>',
+    fjord: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M1.5 11 5 3.5 7.5 9M14.5 11 11 3.5 8.5 9"/><path d="M1.5 13.5c2 0 2-1 4-1s2 1 4 1 2-1 5-1"/></svg>',
+    canyon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 4h4l1 3 1.5 6.5M14.5 4h-4l-1 3L8 13.5"/><path d="M1.5 8h3M14.5 8h-3"/></svg>',
+    valley: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M1.5 3v10.5h13V3"/><path d="M1.5 3c2 4 4 7 6.5 7s4.5-3 6.5-7"/></svg>',
+    glacier: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"><path d="M1.5 13.5 6 5l2 3 2-2 4.5 7.5z"/><path d="M8 2v2.4M6.9 2.6l2.2 1.2M9.1 2.6 6.9 3.8"/></svg>'
+  };
+  const KIND_NAMES = { peak: "Mountains", volcano: "Volcanoes", glacier: "Glaciers and ice", fjord: "Fjords", canyon: "Canyons", valley: "Valleys" };
+
+  const PLACES = [
+    { id: "matterhorn", name: "Matterhorn", kind: "peak", where: "Swiss Alps", lat: 45.9763, lon: 7.6586, span: 14 },
+    { id: "everest", name: "Everest", kind: "peak", where: "Himalaya", lat: 27.9881, lon: 86.925, span: 18, season: "winter" },
+    { id: "dolomites", name: "Tre Cime", kind: "peak", where: "Dolomites", lat: 46.6187, lon: 12.3022, span: 14 },
+    { id: "torres", name: "Torres del Paine", kind: "peak", where: "Patagonia", lat: -50.97, lon: -72.98, span: 26 },
+    { id: "fuji", name: "Mount Fuji", kind: "volcano", where: "Japan", lat: 35.3606, lon: 138.7274, span: 22, season: "winter" },
+    { id: "rainier", name: "Mount Rainier", kind: "volcano", where: "Washington", lat: 46.8523, lon: -121.7603, span: 24 },
+    { id: "etna", name: "Mount Etna", kind: "volcano", where: "Sicily", lat: 37.751, lon: 14.9934, span: 30 },
+    { id: "kilimanjaro", name: "Kilimanjaro", kind: "volcano", where: "Tanzania", lat: -3.0674, lon: 37.3556, span: 32, season: "winter" },
+    { id: "eyjafjalla", name: "Eyjafjallajökull", kind: "glacier", where: "Iceland", lat: 63.63, lon: -19.62, span: 24 },
+    { id: "geiranger", name: "Geirangerfjord", kind: "fjord", where: "Norway", lat: 62.11, lon: 7.1, span: 18 },
+    { id: "milford", name: "Milford Sound", kind: "fjord", where: "New Zealand", lat: -44.64, lon: 167.9, span: 20 },
+    { id: "grandcanyon", name: "Grand Canyon", kind: "canyon", where: "Arizona", lat: 36.1, lon: -112.11, span: 24 },
+    { id: "yosemite", name: "Yosemite Valley", kind: "valley", where: "California", lat: 37.735, lon: -119.58, span: 14 }
+  ];
+
+  const RATIOS = [
+    { id: "1:1", label: "1:1", r: 1, w: 1080, h: 1080, title: "Square, Instagram post, 1080 × 1080" },
+    { id: "4:5", label: "4:5", r: 0.8, w: 1080, h: 1350, title: "Instagram portrait, 1080 × 1350" },
+    { id: "9:16", label: "9:16", r: 0.5625, w: 1080, h: 1920, title: "Story or Reel, 1080 × 1920" },
+    { id: "16:9", label: "16:9", r: 16 / 9, w: 1600, h: 900, title: "X or YouTube, 1600 × 900" },
+    { id: "1.91:1", label: "1.91", r: 1200 / 627, w: 1200, h: 627, title: "LinkedIn or link card, 1200 × 627" },
+    { id: "3:2", label: "3:2", r: 1.5, w: 1500, h: 1000, title: "News or landscape photo, 1500 × 1000" },
+    { id: "free", label: "Free", r: 0, w: 0, h: 0, title: "Free: the shape of your screen" }
+  ];
+
+  const LOOKS = {
+    natural: { name: "Natural", glow: 0.25, sat: 1.1, shadow: [0.78, 0.84, 0.96], light: [1.06, 1.02, 0.95], haze: 0.18, hazeCol: [0.62, 0.72, 0.88], ramp: [[0.30, 0.42, 0.28], [0.58, 0.60, 0.42], [0.72, 0.64, 0.55], [0.97, 0.97, 0.98]], sky: [[0.05, 0.08, 0.14], [0.42, 0.52, 0.66]], swatch: "linear-gradient(135deg,#3f5a3a,#a9a27e 55%,#f2f1ec)" },
+    golden: { name: "Golden", glow: 0.6, sat: 1.2, shadow: [0.52, 0.52, 0.82], light: [1.28, 1.02, 0.70], haze: 0.28, hazeCol: [1.0, 0.72, 0.5], ramp: [[0.32, 0.30, 0.22], [0.70, 0.55, 0.34], [0.90, 0.74, 0.52], [1.0, 0.93, 0.82]], sky: [[0.10, 0.08, 0.16], [0.95, 0.62, 0.38]], swatch: "linear-gradient(135deg,#3a2d4f,#c9773e 55%,#ffd79a)" },
+    alpenglow: { name: "Alpenglow", glow: 0.7, sat: 1.15, shadow: [0.44, 0.42, 0.78], light: [1.30, 0.82, 0.88], haze: 0.32, hazeCol: [0.78, 0.55, 0.82], ramp: [[0.22, 0.20, 0.36], [0.52, 0.38, 0.56], [0.86, 0.58, 0.66], [1.0, 0.88, 0.90]], sky: [[0.07, 0.06, 0.16], [0.86, 0.52, 0.66]], swatch: "linear-gradient(135deg,#2a2550,#b7608a 55%,#ffd0d6)" },
+    swiss: { name: "Swiss", glow: 0.15, sat: 0.9, shadow: [0.58, 0.68, 0.84], light: [1.14, 1.08, 0.86], haze: 0.38, hazeCol: [0.70, 0.79, 0.90], ramp: [[0.55, 0.66, 0.52], [0.78, 0.80, 0.62], [0.90, 0.86, 0.74], [0.99, 0.98, 0.95]], sky: [[0.10, 0.13, 0.20], [0.70, 0.78, 0.86]], swatch: "linear-gradient(135deg,#8ba4c4,#cfd2a2 55%,#fbf7ea)" },
+    moonlight: { name: "Moonlight", glow: 0.35, sat: 0.45, shadow: [0.22, 0.30, 0.55], light: [0.78, 0.88, 1.08], haze: 0.25, hazeCol: [0.20, 0.28, 0.48], ramp: [[0.08, 0.10, 0.18], [0.20, 0.26, 0.40], [0.45, 0.52, 0.68], [0.86, 0.90, 1.0]], sky: [[0.02, 0.03, 0.07], [0.16, 0.22, 0.38]], swatch: "linear-gradient(135deg,#0d1424,#33466e 55%,#c5d2ef)" },
+    mono: { name: "Mono", glow: 0.2, sat: 0.0, shadow: [0.9, 0.9, 0.9], light: [1.05, 1.05, 1.05], haze: 0.2, hazeCol: [0.75, 0.75, 0.75], ramp: [[0.35, 0.35, 0.35], [0.6, 0.6, 0.6], [0.8, 0.8, 0.8], [0.98, 0.98, 0.98]], sky: [[0.04, 0.04, 0.05], [0.45, 0.45, 0.48]], swatch: "linear-gradient(135deg,#1d1d1f,#8a8a8c 55%,#f5f5f5)" }
+  };
+
+  const LIGHTS = [
+    { id: "classic", name: "Classic", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l3.5 3.5"/><circle cx="10" cy="10" r="3.5"/></svg>', set: () => ({ az: 315, alt: 40, str: 0.8, shadow: "1" }) },
+    { id: "dawn", name: "Dawn", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 12h12M4.5 12a3.5 3.5 0 0 1 7 0M8 3.5v2M3.3 6.3l1.3 1.2M12.7 6.3l-1.3 1.2"/></svg>', set: () => ({ az: 95, alt: 8, str: 0.8, shadow: "1" }) },
+    { id: "golden", name: "Golden", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="9" r="3"/><path d="M8 2.5v1.5M2.5 9H4M12 9h1.5M4 5l1 1M12 5l-1 1M2 13.5h12"/></svg>', set: () => ({ az: 255, alt: 14, str: 0.8, shadow: "1" }) },
+    { id: "noon", name: "Noon", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>', set: () => ({ az: num("lat") >= 0 ? 180 : 0, alt: 62, str: 0.8, shadow: "1" }) },
+    { id: "dramatic", name: "Dramatic", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M9 1.5 4 9h3.5L6.5 14.5 12 7H8.5z"/></svg>', set: () => ({ az: 300, alt: 16, str: 1, shadow: "1" }) },
+    { id: "soft", name: "Overcast", icon: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4.5 12.5h7a3 3 0 0 0 .3-6 4 4 0 0 0-7.6 1A2.5 2.5 0 0 0 4.5 12.5z"/></svg>', set: () => ({ az: 315, alt: 55, str: 0.55, shadow: "0", multi: "1" }) }
+  ];
+
+  const DEF = {
+    place: "matterhorn", lat: "45.9763", lon: "7.6586", span: "14", name: "Matterhorn", ratio: "4:5", rf: "1.5",
+    quality: "high", comp: "lc", season: "summer", start: "", end: "", date: "", layer: "true",
+    az: "315", alt: "40", str: "0.8", exag: "2", multi: "1", shadow: "1",
+    look: "natural", glow: "0.25", sat: "1.1", exp: "1.05", view: "relief", cap: "1", ct: "", cs: "", cc: "",
+    clip: "orbit", dur: "10", out: "social", panel: "1", fine: "0", yaw: "20", pitch: "30", dist: "2.2"
+  };
+
+  function g(k) { const v = P.get(k); return v == null || v === "" ? DEF[k] : v; }
+  function num(k) { const v = parseFloat(g(k)); return Number.isFinite(v) ? v : parseFloat(DEF[k]); }
+  function on(k) { return g(k) === "1"; }
+  function setP(obj) { for (const [k, v] of Object.entries(obj)) { if (P.get(k) !== String(v)) P.set(k, String(v)); } }
+
+  function ratioInfo() {
+    const r = RATIOS.find((x) => x.id === g("ratio")) || RATIOS[1];
+    if (r.id !== "free") return r;
+    const a = Math.min(2.5, Math.max(0.4, num("rf")));
+    return { ...r, r: a, w: a >= 1 ? 1600 : Math.round(1600 * a), h: a >= 1 ? Math.round(1600 / a) : 1600 };
+  }
+  function aspect() { return ratioInfo().r; }
+  function areaKm() {
+    const a = aspect(), s = num("span");
+    return a >= 1 ? [s, s / a] : [s * a, s];
+  }
+
+  let toastTimer = 0;
+  function toast(html, ms) {
+    const t = $("toast");
+    t.innerHTML = html;
+    t.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("on"), ms || 3200);
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function fmtCoord(lat, lon) {
+    return `${Math.abs(lat).toFixed(3)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(3)}° ${lon >= 0 ? "E" : "W"}`;
+  }
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function fmtDate(s, noYear) {
+    if (!s) return "";
+    const [y, m, d] = s.split("-").map(Number);
+    return noYear ? `${d} ${MONTHS[m - 1]}` : `${d} ${MONTHS[m - 1]} ${y}`;
+  }
+  function fmtKm(v) { return v >= 10 ? Math.round(v).toString() : v.toFixed(1); }
+  function hashStr(s) {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(16);
+  }
+  function compass(a) { return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(((a % 360) + 360) % 360 / 45) % 8]; }
+
+  const glc = $("gl");
+  const gl = glc.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
+
+  const VS_QUAD = `#version 300 es
+in vec2 aPos; out vec2 vUv;
+void main(){ vUv = aPos * 0.5 + 0.5; gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+  const FS_ART = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+uniform sampler2D uDem;
+uniform sampler2D uImg;
+uniform sampler2D uMask;
+uniform vec2 uDemSize;
+uniform float uPix;
+uniform float uExag;
+uniform vec3 uSun;
+uniform vec3 uSunA;
+uniform vec3 uSunB;
+uniform vec2 uSunDir;
+uniform float uSunTan;
+uniform float uStrength;
+uniform float uMulti;
+uniform float uShadow;
+uniform int uLayer;
+uniform float uHasImg;
+uniform float uGlow;
+uniform float uSat;
+uniform float uExp;
+uniform float uVig;
+uniform float uHaze;
+uniform vec3 uShadowTint;
+uniform vec3 uLightTint;
+uniform vec3 uHazeCol;
+uniform vec4 uLo;
+uniform vec4 uHi;
+uniform vec2 uElev;
+uniform vec3 uR0;
+uniform vec3 uR1;
+uniform vec3 uR2;
+uniform vec3 uR3;
+in vec2 vUv;
+out vec4 outColor;
+
+float H(vec2 p) {
+  vec2 q = clamp(p - 0.5, vec2(0.0), uDemSize - 1.0);
+  ivec2 i = ivec2(floor(q));
+  vec2 f = q - floor(q);
+  ivec2 m = ivec2(uDemSize) - 1;
+  float a = texelFetch(uDem, min(i, m), 0).r;
+  float b = texelFetch(uDem, min(i + ivec2(1, 0), m), 0).r;
+  float c = texelFetch(uDem, min(i + ivec2(0, 1), m), 0).r;
+  float d = texelFetch(uDem, min(i + ivec2(1, 1), m), 0).r;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+vec3 normalAt(vec2 p, float e) {
+  float hl = H(p - vec2(e, 0.0));
+  float hr = H(p + vec2(e, 0.0));
+  float hu = H(p - vec2(0.0, e));
+  float hd = H(p + vec2(0.0, e));
+  float dzdx = (hr - hl) / (2.0 * e * uPix);
+  float dzdn = (hu - hd) / (2.0 * e * uPix);
+  return normalize(vec3(-dzdx * uExag, -dzdn * uExag, 1.0));
+}
+
+float castShadow(vec2 p, float h0) {
+  float res = 1.0;
+  float t = 1.0 + fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+  for (int i = 0; i < 72; i++) {
+    vec2 q = p + uSunDir * t;
+    if (q.x < 0.0 || q.y < 0.0 || q.x > uDemSize.x || q.y > uDemSize.y) break;
+    float dist = t * uPix;
+    float ray = h0 * uExag + dist * uSunTan;
+    float s = (ray - H(q) * uExag) / dist;
+    res = min(res, smoothstep(-0.02, 0.07, s));
+    if (res < 0.01) break;
+    t += max(1.0, t * 0.07);
+  }
+  return res;
+}
+
+vec3 ramp(float t) {
+  t = clamp(t, 0.0, 1.0);
+  if (t < 0.33) return mix(uR0, uR1, t / 0.33);
+  if (t < 0.66) return mix(uR1, uR2, (t - 0.33) / 0.33);
+  return mix(uR2, uR3, (t - 0.66) / 0.34);
+}
+
+vec3 shoulder(vec3 c) {
+  vec3 k = 0.78 + 0.22 * (1.0 - exp(-(c - 0.78) / 0.22));
+  return mix(c, k, step(0.78, c));
+}
+
+void main() {
+  vec2 uv = vec2(vUv.x, 1.0 - vUv.y);
+  vec2 p = uv * uDemSize;
+  float h = H(p);
+  float te = (h - uElev.x) / max(uElev.y - uElev.x, 1.0);
+  vec3 n = normalAt(p, 1.0);
+  vec3 ns = normalAt(p, 5.0);
+
+  vec4 raw = texture(uImg, uv);
+  vec4 refl = raw * raw;
+  float valid = step(0.006, raw.r + raw.g + raw.b) * uHasImg * texture(uMask, uv).r;
+  vec3 relief = ramp(te);
+  vec3 base = relief;
+  vec3 emissive = vec3(0.0);
+  if (uLayer == 0) {
+    base = pow(clamp((refl.rgb - uLo.rgb) / max(uHi.rgb - uLo.rgb, vec3(0.001)), 0.0, 1.6), vec3(0.8));
+  } else if (uLayer == 1) {
+    vec3 fc = vec3(refl.a, refl.r, refl.g);
+    vec3 lo = vec3(uLo.a, uLo.r, uLo.g);
+    vec3 hi = vec3(uHi.a, uHi.r, uHi.g);
+    base = pow(clamp((fc - lo) / max(hi - lo, vec3(0.001)), 0.0, 1.4), vec3(0.9));
+  } else if (uLayer == 2) {
+    float nd = (refl.a - refl.r) / (refl.a + refl.r + 0.0001);
+    vec3 dark = vec3(0.07, 0.075, 0.09) + relief * 0.16;
+    vec3 veg = mix(vec3(0.06, 0.36, 0.33), vec3(0.62, 1.0, 0.38), smoothstep(0.4, 0.85, nd));
+    float vm = smoothstep(0.15, 0.55, nd);
+    base = mix(dark, veg, vm);
+    base = mix(base, vec3(0.03, 0.09, 0.2), smoothstep(0.0, -0.2, nd));
+    emissive = veg * smoothstep(0.35, 0.85, nd) * 0.35;
+  }
+  if (uLayer < 3) base = mix(relief, base, valid);
+
+  float s0 = max(dot(n, uSun), 0.0);
+  float sa = max(dot(n, uSunA), 0.0);
+  float sb = max(dot(n, uSunB), 0.0);
+  float direct = mix(s0, 0.55 * s0 + 0.225 * sa + 0.225 * sb, uMulti);
+  float sh = 1.0;
+  if (uShadow > 0.5) sh = castShadow(p, h);
+  direct *= mix(1.0, sh, 0.88);
+  float sky = 0.55 + 0.45 * n.z;
+  float lit = 0.42 * sky + 0.8 * direct;
+  float flatLit = 0.42 + 0.8 * uSun.z;
+  float rel = mix(1.0, lit / flatLit, uStrength);
+  vec3 tint = mix(uShadowTint, uLightTint, clamp(direct * 1.25, 0.0, 1.0));
+  vec3 col = base * rel * mix(vec3(1.0), tint, uStrength);
+
+  float rim = pow(clamp(dot(ns, uSun), 0.0, 1.0), 5.0) * sh;
+  col += uLightTint * rim * uGlow * 0.32 * (0.35 + dot(base, vec3(0.33)));
+  col = mix(col, uHazeCol * (0.55 + 0.45 * rel), uHaze * pow(1.0 - clamp(te, 0.0, 1.0), 2.2) * 0.55);
+
+  col *= uExp;
+  float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col = max(mix(vec3(l), col, uSat), 0.0);
+  col += emissive * (0.5 + uGlow) * uExp;
+  col = shoulder(col);
+  vec2 d = vUv - 0.5;
+  col *= 1.0 - uVig * dot(d, d) * 1.4;
+  outColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+}`;
+
+  const VS_MESH = `#version 300 es
+precision highp float;
+precision highp sampler2D;
+in vec3 aUv;
+uniform sampler2D uDem;
+uniform vec2 uDemSize;
+uniform vec2 uExt;
+uniform mat4 uMvp;
+uniform float uZScale;
+uniform float uZBase;
+out vec2 vUv;
+out float vEdge;
+out vec3 vWorld;
+void main() {
+  vec2 uv = aUv.xy;
+  ivec2 i = ivec2(clamp(uv * uDemSize, vec2(0.0), uDemSize - 1.0));
+  float h = texelFetch(uDem, i, 0).r;
+  float y = (h - uZBase) * uZScale;
+  if (aUv.z > 1.5) y = -0.035;
+  vec3 p = vec3((uv.x - 0.5) * uExt.x, y, (uv.y - 0.5) * uExt.y);
+  vUv = uv;
+  vEdge = aUv.z > 0.5 ? 1.0 : 0.0;
+  vWorld = p;
+  gl_Position = uMvp * vec4(p, 1.0);
+}`;
+
+  const FS_MESH = `#version 300 es
+precision highp float;
+uniform sampler2D uArt;
+uniform vec3 uFog;
+uniform vec3 uCam;
+uniform float uFogK;
+uniform float uFogStart;
+in vec2 vUv;
+in float vEdge;
+in vec3 vWorld;
+out vec4 outColor;
+void main() {
+  vec3 c = texture(uArt, vec2(vUv.x, 1.0 - vUv.y)).rgb;
+  if (vEdge > 0.5) {
+    float k = clamp((vWorld.y + 0.035) / 0.08, 0.0, 1.0);
+    c = mix(vec3(0.03, 0.035, 0.045), vec3(0.10, 0.105, 0.12), k);
+  }
+  float d = length(vWorld - uCam);
+  float f = 1.0 - exp(-pow(max(d - uFogStart, 0.0) * uFogK, 2.0));
+  c = mix(c, uFog, f * 0.75);
+  outColor = vec4(c, 1.0);
+}`;
+
+  const FS_SKY = `#version 300 es
+precision highp float;
+uniform vec3 uTop;
+uniform vec3 uBot;
+in vec2 vUv;
+out vec4 outColor;
+void main() {
+  float t = smoothstep(0.0, 1.0, vUv.y);
+  vec3 c = mix(uBot, uTop, pow(t, 0.7));
+  vec2 d = vUv - vec2(0.5, 0.35);
+  c *= 1.0 - 0.35 * dot(d, d);
+  outColor = vec4(c, 1.0);
+}`;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "shader error");
+    return s;
+  }
+  function program(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p) || "link error");
+    const u = {};
+    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+    for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); u[info.name] = gl.getUniformLocation(p, info.name); }
+    return { p, u };
+  }
+
+  let progArt, progMesh, progSky, quadVao, meshVao, meshCount = 0, meshFor = "", meshBuffers = [];
+  let texDem = null, texImg = null, texMask = null, texArt = null, fbArt = null, artKey = "", artSig = "", dataStamp = 0;
+  let data = null;
+  const maxTex = gl ? gl.getParameter(gl.MAX_TEXTURE_SIZE) : 4096;
+
+  function initGL() {
+    progArt = program(VS_QUAD, FS_ART);
+    progMesh = program(VS_MESH, FS_MESH);
+    progSky = program(VS_QUAD, FS_SKY);
+    quadVao = gl.createVertexArray();
+    gl.bindVertexArray(quadVao);
+    const qb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, qb);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    for (const pr of [progArt, progSky]) {
+      const loc = gl.getAttribLocation(pr.p, "aPos");
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    }
+    gl.bindVertexArray(null);
+  }
+
+  function texParams(filter) {
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, filter], [gl.TEXTURE_MAG_FILTER, filter], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  }
+
+  function uploadData(d) {
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    if (!texDem) texDem = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texDem);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, d.w, d.h, 0, gl.RED, gl.FLOAT, d.dem);
+    texParams(gl.NEAREST);
+    if (!texImg) texImg = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texImg);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, d.img ? d.iw : 1, d.img ? d.ih : 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, d.img || new Uint8Array(4));
+    texParams(gl.LINEAR);
+    setMask(d.mask || { w: 1, h: 1, v: new Uint8Array([255]) });
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    data = d;
+    dataStamp++;
+    meshFor = "";
+  }
+
+  function setMask(m) {
+    if (!texMask) texMask = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texMask);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, m.w, m.h, 0, gl.RED, gl.UNSIGNED_BYTE, m.v);
+    texParams(gl.NEAREST);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  function uploadTile(i, bytes) {
+    const p = partial;
+    const x0 = (i % p.nx) * p.tw, y0 = Math.floor(i / p.nx) * p.th;
+    gl.bindTexture(gl.TEXTURE_2D, texImg);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, x0, y0, p.tw, p.th, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    const iw = data.iw;
+    for (let row = 0; row < p.th; row++) data.img.set(bytes.subarray(row * p.tw * 4, (row + 1) * p.tw * 4), ((y0 + row) * iw + x0) * 4);
+    Object.assign(data, stretchOf(data.img));
+    p.uploaded.add(i);
+    p.reveal.set(i, performance.now());
+    dataStamp++;
+    if (!revealReq) revealReq = requestAnimationFrame(animateReveal);
+  }
+
+  let revealReq = 0;
+  function animateReveal() {
+    revealReq = 0;
+    const p = partial;
+    if (!p || !data || !data.mask) return;
+    const now = performance.now();
+    let moving = false;
+    for (const [i, t0] of p.reveal) {
+      const k = Math.min(1, (now - t0) / 500);
+      data.mask.v[i] = Math.round(255 * k * k * (3 - 2 * k));
+      if (k < 1) moving = true;
+    }
+    setMask(data.mask);
+    dataStamp++;
+    requestRender();
+    if (moving) revealReq = requestAnimationFrame(animateReveal);
+  }
+
+  function ensureArtTarget(w, h) {
+    const key = w + "x" + h;
+    if (fbArt && artKey === key) return;
+    if (!texArt) texArt = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texArt);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    if (!fbArt) fbArt = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbArt);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texArt, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    artKey = key;
+  }
+
+  function buildMesh() {
+    const long = 400;
+    const Mx = data.w >= data.h ? Math.min(data.w, long) : Math.max(8, Math.round(Math.min(data.h, long) * data.w / data.h));
+    const My = data.h >= data.w ? Math.min(data.h, long) : Math.max(8, Math.round(Math.min(data.w, long) * data.h / data.w));
+    const edges = [];
+    for (let i = 0; i < Mx; i++) edges.push([i, 0]);
+    for (let j = 0; j < My; j++) edges.push([Mx - 1, j]);
+    for (let i = Mx - 1; i >= 0; i--) edges.push([i, My - 1]);
+    for (let j = My - 1; j >= 0; j--) edges.push([0, j]);
+    const verts = new Float32Array((Mx * My + edges.length * 2) * 3);
+    let o = 0;
+    for (let j = 0; j < My; j++) {
+      for (let i = 0; i < Mx; i++) { verts[o++] = (i + 0.5) / Mx; verts[o++] = (j + 0.5) / My; verts[o++] = 0; }
+    }
+    for (const [i, j] of edges) {
+      for (const z of [1, 2]) { verts[o++] = (i + 0.5) / Mx; verts[o++] = (j + 0.5) / My; verts[o++] = z; }
+    }
+    const idx = new Uint32Array((Mx - 1) * (My - 1) * 6 + (edges.length - 1) * 6);
+    o = 0;
+    for (let j = 0; j < My - 1; j++) {
+      for (let i = 0; i < Mx - 1; i++) {
+        const a = j * Mx + i, b = a + 1, c = a + Mx, d = c + 1;
+        idx[o++] = a; idx[o++] = c; idx[o++] = b;
+        idx[o++] = b; idx[o++] = c; idx[o++] = d;
+      }
+    }
+    const base = Mx * My;
+    for (let k = 0; k < edges.length - 1; k++) {
+      const t0 = base + k * 2, b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3;
+      idx[o++] = t0; idx[o++] = b0; idx[o++] = t1;
+      idx[o++] = t1; idx[o++] = b0; idx[o++] = b1;
+    }
+    if (meshVao) gl.deleteVertexArray(meshVao);
+    for (const b of meshBuffers) gl.deleteBuffer(b);
+    meshVao = gl.createVertexArray();
+    gl.bindVertexArray(meshVao);
+    const vb = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(progMesh.p, "aUv");
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
+    const ib = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    meshBuffers = [vb, ib];
+    meshCount = idx.length;
+    meshFor = data.w + "x" + data.h;
+  }
+
+  function sunVec(azDeg, altDeg) {
+    const a = azDeg * Math.PI / 180, e = altDeg * Math.PI / 180;
+    return [Math.sin(a) * Math.cos(e), Math.cos(a) * Math.cos(e), Math.sin(e)];
+  }
+
+  function look() { return LOOKS[g("look")] || LOOKS.natural; }
+
+  function drawArt(target, w, h, over) {
+    const L = look();
+    const az = over && over.az != null ? over.az : num("az");
+    const alt = num("alt");
+    const u = progArt.u;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
+    gl.viewport(0, 0, w, h);
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(progArt.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texDem); gl.uniform1i(u.uDem, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texImg); gl.uniform1i(u.uImg, 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texMask); gl.uniform1i(u.uMask, 2);
+    gl.uniform2f(u.uDemSize, data.w, data.h);
+    gl.uniform1f(u.uPix, data.pix);
+    gl.uniform1f(u.uExag, num("exag"));
+    gl.uniform3fv(u.uSun, sunVec(az, alt));
+    gl.uniform3fv(u.uSunA, sunVec(az - 60, alt + 8));
+    gl.uniform3fv(u.uSunB, sunVec(az + 60, alt + 8));
+    const ar = az * Math.PI / 180;
+    gl.uniform2f(u.uSunDir, Math.sin(ar), -Math.cos(ar));
+    gl.uniform1f(u.uSunTan, Math.tan(alt * Math.PI / 180));
+    gl.uniform1f(u.uStrength, num("str"));
+    gl.uniform1f(u.uMulti, on("multi") ? 1 : 0);
+    gl.uniform1f(u.uShadow, on("shadow") ? 1 : 0);
+    const layer = { true: 0, false: 1, ndvi: 2, relief: 3 }[g("layer")];
+    gl.uniform1i(u.uLayer, layer == null ? 0 : layer);
+    gl.uniform1f(u.uHasImg, data.img ? 1 : 0);
+    gl.uniform1f(u.uGlow, num("glow"));
+    gl.uniform1f(u.uSat, num("sat"));
+    gl.uniform1f(u.uExp, num("exp"));
+    gl.uniform1f(u.uVig, over && over.vig != null ? over.vig : 0.55);
+    gl.uniform1f(u.uHaze, L.haze);
+    gl.uniform3fv(u.uShadowTint, L.shadow);
+    gl.uniform3fv(u.uLightTint, L.light);
+    gl.uniform3fv(u.uHazeCol, L.hazeCol);
+    gl.uniform4fv(u.uLo, data.lo);
+    gl.uniform4fv(u.uHi, data.hi);
+    gl.uniform2f(u.uElev, data.zmin, data.zmax);
+    gl.uniform3fv(u.uR0, L.ramp[0]); gl.uniform3fv(u.uR1, L.ramp[1]); gl.uniform3fv(u.uR2, L.ramp[2]); gl.uniform3fv(u.uR3, L.ramp[3]);
+    gl.bindVertexArray(quadVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
+  }
+
+  function m4mul(a, b) {
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
+      let s = 0;
+      for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
+      o[c * 4 + r] = s;
+    }
+    return o;
+  }
+  function perspective(fovy, asp, near, far) {
+    const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return new Float32Array([f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0]);
+  }
+  function lookAt(e, t, up) {
+    let zx = e[0] - t[0], zy = e[1] - t[1], zz = e[2] - t[2];
+    let l = Math.hypot(zx, zy, zz); zx /= l; zy /= l; zz /= l;
+    let xx = up[1] * zz - up[2] * zy, xy = up[2] * zx - up[0] * zz, xz = up[0] * zy - up[1] * zx;
+    l = Math.hypot(xx, xy, xz); xx /= l; xy /= l; xz /= l;
+    const yx = zy * xz - zz * xy, yy = zz * xx - zx * xz, yz = zx * xy - zy * xx;
+    return new Float32Array([xx, yx, zx, 0, xy, yy, zy, 0, xz, yz, zz, 0,
+      -(xx * e[0] + xy * e[1] + xz * e[2]), -(yx * e[0] + yy * e[1] + yz * e[2]), -(zx * e[0] + zy * e[1] + zz * e[2]), 1]);
+  }
+
+  const cam = { yaw: 20, pitch: 30, dist: 2.2 };
+
+  function draw3d(w, h, over) {
+    const L = look();
+    const long = Math.min(2048, maxTex);
+    const aw = data.w >= data.h ? long : Math.round(long * data.w / data.h);
+    const ah = data.h >= data.w ? long : Math.round(long * data.h / data.w);
+    ensureArtTarget(aw, ah);
+    const sig = [dataStamp, aw, ah, over && over.az, ...["az", "alt", "str", "exag", "multi", "shadow", "layer", "look", "glow", "sat", "exp"].map(g)].join("|");
+    if (sig !== artSig) {
+      drawArt(fbArt, aw, ah, { az: over && over.az, vig: 0 });
+      gl.bindTexture(gl.TEXTURE_2D, texArt);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      artSig = sig;
+    }
+    if (meshFor !== data.w + "x" + data.h) buildMesh();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, w, h);
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(progSky.p);
+    gl.uniform3fv(progSky.u.uTop, L.sky[0]);
+    gl.uniform3fv(progSky.u.uBot, L.sky[1]);
+    gl.bindVertexArray(quadVao);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    const yaw = (over && over.yaw != null ? over.yaw : cam.yaw) * Math.PI / 180;
+    const pitch = (over && over.pitch != null ? over.pitch : cam.pitch) * Math.PI / 180;
+    const ext = data.w >= data.h ? [1, data.h / data.w] : [data.w / data.h, 1];
+    const half = Math.hypot(ext[0], ext[1]) / 2, tv = Math.tan(16 * Math.PI / 180);
+    const need = Math.max(half / (tv * w / h), half / tv) * (w < h ? 0.78 : 0.9);
+    const dist = need * (over && over.dist != null ? over.dist : cam.dist) / 2.2;
+    const zScale = num("exag") * 0.6 / (data.pix * Math.max(data.w, data.h));
+    const target = [0, (data.zmax - data.zmin) * zScale * 0.35, 0];
+    const eye = [dist * Math.cos(pitch) * Math.sin(yaw), target[1] + dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw)];
+    const mvp = m4mul(perspective(32 * Math.PI / 180, w / h, 0.01, 30), lookAt(eye, target, [0, 1, 0]));
+    gl.enable(gl.DEPTH_TEST);
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.useProgram(progMesh.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texDem); gl.uniform1i(progMesh.u.uDem, 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texArt); gl.uniform1i(progMesh.u.uArt, 1);
+    gl.uniform2f(progMesh.u.uDemSize, data.w, data.h);
+    gl.uniform2f(progMesh.u.uExt, ext[0], ext[1]);
+    gl.uniformMatrix4fv(progMesh.u.uMvp, false, mvp);
+    gl.uniform1f(progMesh.u.uZScale, zScale);
+    gl.uniform1f(progMesh.u.uZBase, data.zmin);
+    gl.uniform3fv(progMesh.u.uFog, L.sky[1]);
+    gl.uniform3fv(progMesh.u.uCam, eye);
+    gl.uniform1f(progMesh.u.uFogK, 1.1 / dist);
+    gl.uniform1f(progMesh.u.uFogStart, dist * 0.9);
+    gl.bindVertexArray(meshVao);
+    gl.drawElements(gl.TRIANGLES, meshCount, gl.UNSIGNED_INT, 0);
+    gl.bindVertexArray(null);
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  let frameReq = 0, backdropAt = 0, recording = false, recStop = null;
+  const backdrop = $("backdrop");
+  const bctx = backdrop.getContext("2d");
+
+  function layoutCanvas() {
+    const inner = $("stageInner");
+    const rw = inner.clientWidth, rh = inner.clientHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const tb = $("titleBox"), vs = $("viewSwitch");
+    const narrow = rw < 700;
+    const head = Math.max(tb.offsetTop + tb.offsetHeight, vs.offsetTop + vs.offsetHeight);
+    const top = head + (narrow ? 8 : 14);
+    const bottom = narrow ? 8 : 26;
+    const side = narrow ? 8 : 40;
+    const availW = Math.max(120, rw - side * 2), availH = Math.max(120, rh - top - bottom);
+    const a = aspect();
+    let fw = availW, fh = fw / a;
+    if (fh > availH) { fh = availH; fw = fh * a; }
+    const fr = $("frame");
+    fr.style.width = Math.round(fw) + "px";
+    fr.style.height = Math.round(fh) + "px";
+    fr.style.top = Math.round(top + availH / 2) + "px";
+    fr.style.setProperty("--cs", (Math.max(fw, fh) / 1200).toFixed(4));
+    let pw = Math.round(fw * dpr), ph = Math.round(fh * dpr);
+    if (g("view") !== "3d" && data) {
+      const cap = Math.min(maxTex, Math.max(data.iw || data.w, data.w) * 1.25, 2400);
+      const k = Math.min(1, cap / Math.max(pw, ph));
+      pw = Math.round(pw * k); ph = Math.round(ph * k);
+    }
+    if (glc.width !== pw || glc.height !== ph) { glc.width = pw; glc.height = ph; }
+  }
+
+  function render() {
+    frameReq = 0;
+    if (!data || recording) return;
+    layoutCanvas();
+    renderTo(null);
+  }
+
+  function renderTo(over) {
+    if (g("view") === "3d") draw3d(glc.width, glc.height, over);
+    else drawArt(null, glc.width, glc.height, over);
+    const now = performance.now();
+    if (now - backdropAt > 250) {
+      backdropAt = now;
+      bctx.drawImage(glc, 0, 0, backdrop.width, backdrop.height);
+    }
+  }
+
+  function requestRender() { if (!frameReq) frameReq = requestAnimationFrame(render); }
+
+  function synthData(n, a) {
+    const w = a >= 1 ? n : Math.round(n * a), h = a >= 1 ? Math.round(n / a) : n;
+    const dem = new Float32Array(w * h);
+    const rnd = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
+    const noise = (x, y) => {
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+      const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+      const q = rnd(xi, yi), b = rnd(xi + 1, yi), c = rnd(xi, yi + 1), d = rnd(xi + 1, yi + 1);
+      return q + (b - q) * u + (c - q) * v + (q - b - c + d) * u * v;
+    };
+    let zmin = Infinity, zmax = -Infinity;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      let x = i / n * 4, y = j / n * 4, amp = 1, s = 0;
+      for (let o = 0; o < 6; o++) { s += amp * (1 - Math.abs(noise(x, y) * 2 - 1)); x *= 2.03; y *= 2.03; amp *= 0.5; }
+      const dx = i / w - 0.5, dy = j / h - 0.5;
+      const z = 600 + s * 900 + 1400 * Math.exp(-(dx * dx + dy * dy) * 9);
+      dem[j * w + i] = z;
+      if (z < zmin) zmin = z;
+      if (z > zmax) zmax = z;
+    }
+    return { w, h, dem, img: null, pix: 10000 / n, zmin, zmax, lo: [0, 0, 0, 0], hi: [1, 1, 1, 1], synthetic: true };
+  }
+
+  function stretchOf(img) {
+    const B = 512;
+    const hMin = new Uint32Array(B), hLum = new Uint32Array(B), hNir = new Uint32Array(B);
+    for (let i = 0; i < img.length; i += 4) {
+      const r = img[i], g2 = img[i + 1], b = img[i + 2];
+      if (r + g2 + b === 0) continue;
+      const rr = r * r / 65025, gg = g2 * g2 / 65025, bb = b * b / 65025, nn = img[i + 3] * img[i + 3] / 65025;
+      const lum = (rr + gg + bb) / 3;
+      hMin[Math.min(B - 1, Math.floor(Math.min(rr, gg, bb) * B))]++;
+      if (lum < 0.45) {
+        hLum[Math.min(B - 1, Math.floor(lum * B))]++;
+        hNir[Math.min(B - 1, Math.floor(nn * B))]++;
+      }
+    }
+    const pct = (h, q) => {
+      let total = 0;
+      for (let i = 0; i < B; i++) total += h[i];
+      if (!total) return 0;
+      let acc = 0;
+      for (let i = 0; i < B; i++) { acc += h[i]; if (acc >= total * q) return (i + 0.5) / B; }
+      return 1;
+    };
+    const lo = pct(hMin, 0.005);
+    const hi = Math.min(0.6, Math.max(0.12, pct(hLum, 0.97) * 1.15));
+    const loN = pct(hNir, 0.01);
+    const hiN = Math.min(0.8, Math.max(0.2, pct(hNir, 0.98) * 1.05));
+    return { lo: [lo, lo, lo, loN], hi: [hi, hi, hi, hiN] };
+  }
+
+  function fillHoles(img, w, h) {
+    let holes = 0;
+    for (let i = 0; i < img.length; i += 4) if (img[i] + img[i + 1] + img[i + 2] === 0) holes++;
+    if (!holes || holes === w * h) return img;
+    const levels = [];
+    let cw = w, ch = h;
+    const c0 = new Float32Array(w * h * 4), wt0 = new Float32Array(w * h);
+    for (let i = 0, p = 0; p < w * h; p++, i += 4) {
+      if (img[i] + img[i + 1] + img[i + 2] === 0) continue;
+      c0[i] = img[i]; c0[i + 1] = img[i + 1]; c0[i + 2] = img[i + 2]; c0[i + 3] = img[i + 3];
+      wt0[p] = 1;
+    }
+    levels.push({ w: cw, h: ch, c: c0, wt: wt0 });
+    while (cw > 1 || ch > 1) {
+      const nw = Math.max(1, cw >> 1), nh = Math.max(1, ch >> 1);
+      const nc = new Float32Array(nw * nh * 4), nwt = new Float32Array(nw * nh);
+      const prev = levels[levels.length - 1];
+      for (let y = 0; y < nh; y++) for (let x = 0; x < nw; x++) {
+        let sw = 0, a0 = 0, a1 = 0, a2 = 0, a3 = 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const q = Math.min(ch - 1, y * 2 + dy) * cw + Math.min(cw - 1, x * 2 + dx), ww = prev.wt[q];
+          if (!ww) continue;
+          sw += ww;
+          a0 += prev.c[q * 4]; a1 += prev.c[q * 4 + 1]; a2 += prev.c[q * 4 + 2]; a3 += prev.c[q * 4 + 3];
+        }
+        if (sw > 0) {
+          const q = y * nw + x, f = Math.min(1, sw) / sw;
+          nc[q * 4] = a0 * f; nc[q * 4 + 1] = a1 * f; nc[q * 4 + 2] = a2 * f; nc[q * 4 + 3] = a3 * f;
+          nwt[q] = Math.min(1, sw);
+        }
+      }
+      cw = nw; ch = nh;
+      levels.push({ w: cw, h: ch, c: nc, wt: nwt });
+    }
+    for (let L = levels.length - 2; L >= 0; L--) {
+      const cur = levels[L], par = levels[L + 1];
+      for (let y = 0; y < cur.h; y++) for (let x = 0; x < cur.w; x++) {
+        const q = y * cur.w + x, ww = cur.wt[q];
+        if (ww >= 1) continue;
+        const fx = Math.min(par.w - 1, Math.max(0, (x + 0.5) / 2 - 0.5)), fy = Math.min(par.h - 1, Math.max(0, (y + 0.5) / 2 - 0.5));
+        const x0 = Math.floor(fx), y0 = Math.floor(fy), x1 = Math.min(par.w - 1, x0 + 1), y1 = Math.min(par.h - 1, y0 + 1);
+        const ax = fx - x0, ay = fy - y0;
+        for (let k = 0; k < 4; k++) {
+          const v = (par.c[(y0 * par.w + x0) * 4 + k] * (1 - ax) + par.c[(y0 * par.w + x1) * 4 + k] * ax) * (1 - ay)
+            + (par.c[(y1 * par.w + x0) * 4 + k] * (1 - ax) + par.c[(y1 * par.w + x1) * 4 + k] * ax) * ay;
+          cur.c[q * 4 + k] += (1 - ww) * v;
+        }
+        cur.wt[q] = 1;
+      }
+    }
+    const out = new Uint8Array(img.length);
+    const top = levels[0].c;
+    for (let i = 0; i < out.length; i++) out[i] = Math.max(1, Math.min(255, Math.round(top[i])));
+    return out;
+  }
+
+  let demoReq = 0;
+  function demoLoop(t) {
+    demoReq = 0;
+    if (!data || !data.synthetic || !document.body.classList.contains("loading")) return;
+    layoutCanvas();
+    renderTo({ az: (t / 40) % 360 });
+    demoReq = requestAnimationFrame(demoLoop);
+  }
+  function showDemo() {
+    if (!data || data.synthetic) {
+      uploadData(synthData(160, aspect()));
+      if (!demoReq) demoReq = requestAnimationFrame(demoLoop);
+    }
+  }
+
+  let partial = null;
+  let loadSeq = 0, loadedKey = "", loadingKey = "", liveJob = null, lastInfo = null, lastPlan = null;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function dataArgs() {
+    return {
+      lat: String(num("lat")), lon: String(num("lon")), span: String(num("span")), aspect: aspect().toFixed(4), quality: g("quality"),
+      comp: g("comp"), season: g("season"), start: g("start"), end: g("end"), date: g("date")
+    };
+  }
+
+  function stepState(el, st, label) {
+    el.className = "step " + (st === "done" ? "done" : st === "error" ? "err" : st === "running" ? "run" : "");
+    el.querySelector(".t").textContent = label || "";
+  }
+  function compLabel(comp) {
+    return comp === "median" ? "median" : comp === "single" ? "single date" : comp === "day" ? "best day" : "least-cloudy";
+  }
+  function resText(plan) {
+    if (!plan) return "";
+    return `≈ ${Math.round(plan.img.pixel_m)} m per pixel · ${plan.img.width} × ${plan.img.height}`;
+  }
+
+  async function load() {
+    const args = dataArgs();
+    const key = JSON.stringify(args);
+    if (key === loadedKey && data && !data.synthetic) return;
+    if (key === loadingKey) return;
+    loadingKey = key;
+    const seq = ++loadSeq;
+    partial = null;
+    lastInfo = null;
+    document.body.classList.remove("partial");
+    if (liveJob && !liveJob.workers) liveJob.job.cancelled();
+    liveJob = null;
+    const jobId = "terrain-glow-" + hashStr(key);
+    const title = `Terrain Glow: ${g("name")}`;
+    document.body.classList.add("loading");
+    document.body.classList.remove("login");
+    $("loadErr").classList.remove("on");
+    $("loadBar").style.display = "";
+    $("loadTitle").textContent = `Loading ${g("name")}`;
+    const km = areaKm();
+    $("loadSub").textContent = `${fmtKm(km[0])} × ${fmtKm(km[1])} km, ${({ preview: "Preview", high: "High", print: "Print" })[g("quality")] || "High"} quality`;
+    $("stepImgLabel").textContent = `Sentinel-2 · ${compLabel(g("comp"))}`;
+    stepState($("stepDem"), "running");
+    stepState($("stepImg"), "running");
+    $("footInfo").textContent = "Loading data from Fused";
+    showDemo();
+    const t0 = performance.now();
+    const slow = setTimeout(() => {
+      if (seq !== loadSeq || liveJob) return;
+      liveJob = { job: fused.trackJob({ id: jobId, title, kind: "task" }), workers: false };
+    }, 1500);
+    let r, firstPoll = true;
+    const cached = {};
+    try {
+      for (;;) {
+        r = await fused.runPython("terrain.py", { ...args, job: jobId, title }, { key: "terrain" });
+        if (seq !== loadSeq) return;
+        if (r.login) {
+          clearTimeout(slow);
+          if (liveJob) liveJob.job.cancelled();
+          liveJob = null;
+          showLogin(r.creds_stamp);
+          return;
+        }
+        lastPlan = r.plan;
+        $("resInfo").textContent = resText(r.plan);
+        const tiles = r.plan.img.nx * r.plan.img.ny;
+        $("stepImgLabel").textContent = `Sentinel-2 · ${compLabel(g("comp"))}${tiles > 1 ? ` · ${tiles}\u00a0tiles` : ""}`;
+        const secs = Math.round((performance.now() - t0) / 1000);
+        for (const [part, el] of [["dem", $("stepDem")], ["img", $("stepImg")]]) {
+          const s = r[part];
+          if (firstPoll) cached[part] = s.state === "done";
+          s.cached = cached[part];
+          stepState(el, s.state, s.state === "done" ? (s.cached ? "cached" : `${Math.round(s.seconds)}\u00a0s`) : s.state === "running" ? `${s.elapsed || secs}\u00a0s` : "");
+        }
+        firstPoll = false;
+        if (r.dem.state === "error" || r.img.state === "error") throw new Error((r.dem.state === "error" ? r.dem.message : r.img.message) || "The data request failed.");
+        if (r.dem.state === "done" && r.img.state === "done") break;
+        if (r.dem.state === "done" && r.img.state === "running") await showTiles(r, seq);
+        if (liveJob) {
+          liveJob.workers = true;
+          liveJob.job.update({ done: (r.dem.state === "done" ? 1 : 0) + (r.img.state === "done" ? 1 : 0), total: 2, detail: r.img.state === "done" ? "Elevation" : "Sentinel-2 imagery" });
+        }
+        await sleep(partial && partial.seq === seq ? 900 : 1500);
+        if (seq !== loadSeq) return;
+      }
+      const [demBuf, imgBuf] = await Promise.all([
+        fetch(fused.rawUrl(r.dem.files.bin)).then((x) => { if (!x.ok) throw new Error("Cannot read the elevation file."); return x.arrayBuffer(); }),
+        fetch(fused.rawUrl(r.img.files.bin)).then((x) => { if (!x.ok) throw new Error("Cannot read the imagery file."); return x.arrayBuffer(); })
+      ]);
+      if (seq !== loadSeq) return;
+      const dm = r.dem.meta, im = r.img.meta;
+      const raw = new Uint8Array(imgBuf);
+      uploadData({
+        w: dm.width, h: dm.height, dem: new Float32Array(demBuf), pix: dm.pixel_m,
+        img: fillHoles(raw, im.width, im.height), iw: im.width, ih: im.height,
+        zmin: dm.min, zmax: dm.max, ...stretchOf(raw)
+      });
+      lastInfo = r;
+      loadedKey = key;
+      loadingKey = "";
+      partial = null;
+      document.body.classList.remove("partial");
+      clearTimeout(slow);
+      if (liveJob) liveJob.job.finish(`Loaded in ${Math.round((performance.now() - t0) / 1000)} s`);
+      liveJob = null;
+      document.body.classList.remove("loading");
+      updateTexts();
+      requestRender();
+    } catch (e) {
+      clearTimeout(slow);
+      if (seq !== loadSeq) return;
+      loadingKey = "";
+      if (liveJob) liveJob.job.fail(e);
+      liveJob = null;
+      $("loadBar").style.display = "none";
+      $("loadErrMsg").textContent = (e && e.message ? e.message : String(e)).split("\n").slice(-1)[0];
+      $("loadErr").classList.add("on");
+      $("loadTitle").textContent = "The data did not load";
+    }
+  }
+
+  const SIGN_IN = "Terrain Glow gets the terrain data with your Fused account.";
+  const WAIT = "Complete the sign-in in your browser.";
+  const SHELL_POST = { method: "POST", headers: { "Content-Type": "application/json", "X-Fused": "1" }, body: "{}" };
+  let loginGen = 0, signInSeq = 0;
+
+  function loginStep(button, text) {
+    $("loading").dataset.login = button;
+    $("loadSub").textContent = text;
+  }
+  function showLogin(stamp) {
+    document.body.classList.add("login");
+    $("loadTitle").textContent = "Sign in to Fused";
+    $("footInfo").textContent = "Sign in to load data";
+    const gen = ++loginGen;
+    if (fused.device && fused.device !== "desktop") {
+      loginStep("retry", "Sign in to Fused on the computer that runs FusedRender.");
+      return;
+    }
+    if ($("loading").dataset.login === "cancel") loginStep("cancel", WAIT);
+    else loginStep("signIn", SIGN_IN);
+    watchLogin(gen, stamp == null ? null : stamp);
+  }
+  async function watchLogin(gen, stamp) {
+    const seq = signInSeq;
+    let s = null;
+    if (!document.hidden) {
+      try {
+        const r = await fetch("/api/canvases/status");
+        if (r.ok) s = await r.json();
+      } catch (e) { }
+    }
+    if (gen !== loginGen || !document.body.classList.contains("login")) return;
+    if (s && s.creds_stamp && (stamp === null || s.creds_stamp > stamp)) {
+      $("loading").dataset.login = "";
+      toast("You are signed in to Fused.");
+      retryLoad();
+      return;
+    }
+    if (s && !s.login_in_flight && seq === signInSeq && $("loading").dataset.login === "cancel") {
+      loginStep("signIn", "The sign-in did not complete. Try again.");
+    }
+    setTimeout(() => watchLogin(gen, stamp), 2000);
+  }
+  async function retryLoad() {
+    try { await fused.runPython("terrain.py", { ...dataArgs(), reset: "true" }, { key: "terrain-reset" }); } catch (e) { }
+    loadedKey = "";
+    loadingKey = "";
+    load();
+  }
+  $("signIn").addEventListener("click", async () => {
+    $("signIn").disabled = true;
+    let ok = false;
+    try { ok = (await fetch("/api/canvases/login", SHELL_POST)).ok; } catch (e) { }
+    $("signIn").disabled = false;
+    if (ok) signInSeq++;
+    $("loading").dataset.login = ok ? "cancel" : "signIn";
+    if (document.body.classList.contains("login")) $("loadSub").textContent = ok ? WAIT : "The sign-in did not start. Try again.";
+  });
+  $("loginCancel").addEventListener("click", () => {
+    loginStep("signIn", SIGN_IN);
+    fetch("/api/canvases/login/cancel", SHELL_POST).catch(() => { });
+  });
+  $("loginRetry").addEventListener("click", retryLoad);
+
+  async function readBin(path) {
+    const x = await fetch(fused.rawUrl(path));
+    if (!x.ok) throw new Error("Cannot read " + path);
+    return x.arrayBuffer();
+  }
+
+  async function showTiles(r, seq) {
+    const plan = r.plan.img;
+    if (!partial || partial.seq !== seq) {
+      const dm = r.dem.meta;
+      const dem = new Float32Array(await readBin(r.dem.files.bin));
+      if (seq !== loadSeq) return;
+      partial = { seq, nx: plan.nx, ny: plan.ny, tw: plan.tile[0], th: plan.tile[1], gen: r.img.generation || 0, uploaded: new Set(), reveal: new Map() };
+      uploadData({
+        w: dm.width, h: dm.height, dem, pix: dm.pixel_m, img: new Uint8Array(plan.width * plan.height * 4),
+        iw: plan.width, ih: plan.height, zmin: dm.min, zmax: dm.max, lo: [0.02, 0.02, 0.02, 0.05], hi: [0.3, 0.3, 0.3, 0.5],
+        mask: { w: plan.nx, h: plan.ny, v: new Uint8Array(plan.nx * plan.ny) }, partial: true
+      });
+      document.body.classList.remove("loading");
+      document.body.classList.add("partial");
+      updateTexts();
+      requestRender();
+    }
+    if ((r.img.generation || 0) !== partial.gen) {
+      partial.gen = r.img.generation || 0;
+      partial.uploaded.clear();
+      partial.reveal.clear();
+      data.img.fill(0);
+      data.mask.v.fill(0);
+      setMask(data.mask);
+    }
+    const total = plan.nx * plan.ny;
+    for (const i of r.img.ready || []) {
+      if (partial.uploaded.has(i)) continue;
+      let buf;
+      try { buf = new Uint8Array(await readBin(r.img.tile.replace("{i}", i))); } catch (e) { continue; }
+      if (seq !== loadSeq || !partial || partial.seq !== seq) return;
+      if (buf.length === partial.tw * partial.th * 4) uploadTile(i, buf);
+    }
+    $("tileChip").textContent = `Imagery ${partial.uploaded.size} of ${total} tiles`;
+  }
+
+  $("retry").addEventListener("click", () => {
+    $("loadErr").classList.remove("on");
+    retryLoad();
+  });
+
+  function autoCaption() {
+    const m = lastInfo && lastInfo.img.meta ? lastInfo.img.meta : {};
+    const real = data && !data.synthetic;
+    return {
+      ct: g("name"),
+      cs: [fmtCoord(num("lat"), num("lon")), real ? `Highest point ${Math.round(data.zmax).toLocaleString("en-US")} m` : "", m.label || ""].filter(Boolean).join("  ·  "),
+      cc: `Contains modified Copernicus Sentinel data ${new Date().getUTCFullYear()} · Copernicus DEM GLO-30 · Made with Terrain Glow`
+    };
+  }
+  function captionText() {
+    const a = autoCaption();
+    return { ct: g("ct") || a.ct, cs: g("cs") || a.cs, cc: g("cc") || a.cc };
+  }
+
+  function updateTexts() {
+    $("placeName").textContent = g("name");
+    const km = areaKm();
+    const sub = [`<span>${fmtCoord(num("lat"), num("lon"))}</span>`, `<span>${fmtKm(km[0])} × ${fmtKm(km[1])} km</span>`];
+    if (data && !data.synthetic) sub.push(`<span>${Math.round(data.zmin).toLocaleString("en-US")}–${Math.round(data.zmax).toLocaleString("en-US")} m</span>`);
+    $("placeSub").innerHTML = sub.join("");
+    const c = captionText();
+    for (const k of ["ct", "cs", "cc"]) {
+      const el = document.querySelector(`#cap [data-k="${k}"]`);
+      if (document.activeElement !== el && el.textContent !== c[k]) el.textContent = c[k];
+    }
+    const custom = g("ct") || g("cs") || g("cc");
+    $("capNote").innerHTML = on("cap") ? (custom ? '<button id="capReset">Reset caption text</button>' : "Click the caption to edit it") : "Caption is off";
+    let foot = "Copernicus DEM · Sentinel-2 L2A · Fused";
+    if (lastInfo && lastInfo.img.meta) {
+      const m = lastInfo.img.meta;
+      const parts = [];
+      if (m.scenes) parts.push(`${m.scenes} scenes`);
+      const both = lastInfo.dem.cached && lastInfo.img.cached;
+      parts.push(both ? "from cache" : `fetched on Fused in ${Math.max(lastInfo.dem.seconds || 0, lastInfo.img.seconds || 0)} s`);
+      const mb = ((lastInfo.dem.meta.bytes || 0) + (m.bytes || 0)) / 1048576;
+      parts.push(`${mb.toFixed(1)} MB`);
+      foot = parts.join(" · ");
+    }
+    $("footInfo").textContent = foot;
+    $("resInfo").textContent = resText(lastPlan);
+    const ri = ratioInfo();
+    $("outSocial").textContent = `${ri.w} × ${ri.h}`;
+    $("outFull").textContent = data && !data.synthetic ? `Full, ${data.iw || data.w} × ${data.ih || data.h}` : "Full size";
+  }
+
+  function wrapLines(ctx, text, maxW, maxLines) {
+    const words = text.split(" ");
+    const lines = [];
+    let cur = "";
+    for (const w of words) {
+      const next = cur ? cur + " " + w : w;
+      if (ctx.measureText(next).width <= maxW || !cur) cur = next;
+      else { lines.push(cur); cur = w; }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > maxLines) lines.splice(maxLines - 1, lines.length, lines.slice(maxLines - 1).join(" "));
+    return lines;
+  }
+
+  function drawCaption(ctx, W, H) {
+    if (!on("cap")) return;
+    const c = captionText();
+    const s = Math.max(W, H) / 1200;
+    const sans = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+    const maxW = W - 72 * s;
+    const fontSub = `500 ${Math.round(17 * s)}px ${sans}`, fontCred = `500 ${Math.round(12 * s)}px ${sans}`;
+    ctx.font = fontSub;
+    const sub = wrapLines(ctx, c.cs, maxW, 2);
+    ctx.font = fontCred;
+    const cred = wrapLines(ctx, c.cc, maxW, 2);
+    const extra = (sub.length - 1) * 22 * s + (cred.length - 1) * 16 * s;
+    const top = H - 190 * s - extra;
+    const grad = ctx.createLinearGradient(0, top, 0, H);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(1, "rgba(0,0,0,0.62)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, top, W, H - top);
+    ctx.textBaseline = "alphabetic";
+    ctx.shadowColor = "rgba(0,0,0,0.5)";
+    ctx.shadowBlur = 10 * s;
+    let y = H - 22 * s - (cred.length - 1) * 16 * s;
+    ctx.font = fontCred;
+    ctx.fillStyle = "rgba(246,242,234,0.62)";
+    cred.forEach((line, i) => ctx.fillText(line, 36 * s, y + i * 16 * s, maxW));
+    y -= 24 * s + (sub.length - 1) * 22 * s;
+    ctx.font = fontSub;
+    ctx.fillStyle = "rgba(246,242,234,0.85)";
+    sub.forEach((line, i) => ctx.fillText(line, 36 * s, y + i * 22 * s, maxW));
+    ctx.fillStyle = "#f6f2ea";
+    ctx.font = `600 ${Math.round(46 * s)}px "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif`;
+    ctx.fillText(c.ct, 36 * s, y - 30 * s, maxW);
+    ctx.shadowBlur = 0;
+  }
+
+  function fileStem() {
+    const n = (g("ct") || g("name")).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "terrain";
+    return `terrain-glow-${n}-${g("ratio").replace(/[^0-9a-z]+/gi, "x")}`;
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result).split(",")[1]);
+      fr.onerror = () => rej(fr.error);
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  async function deliver(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    let saved = null;
+    try { saved = await fused.runPython("save_export.py", { name, data: await blobToBase64(blob) }, { key: null }); } catch (e) { }
+    const kb = Math.round(blob.size / 1024).toLocaleString("en-US");
+    toast(saved && saved.path
+      ? `Saved <b>${esc(name)}</b> (${kb} KB). A copy is in the app folder. <a href="${fused.rawUrl(saved.path)}" target="_blank" rel="noopener">Open copy</a>`
+      : `Saved <b>${esc(name)}</b> (${kb} KB) as a browser download. The app folder copy did not save.`, 5200);
+    return saved;
+  }
+
+  function exportSize(kind) {
+    const ri = ratioInfo();
+    if (kind === "clip" || g("out") !== "full" || !data) return [ri.w, ri.h];
+    const iw = data.iw || data.w, ih = data.ih || data.h;
+    const k = Math.min(1, maxTex / Math.max(iw, ih), 4096 / Math.max(iw, ih));
+    return [Math.round(iw * k), Math.round(ih * k)];
+  }
+
+  async function exportPng() {
+    if (recording) return;
+    if (!data || data.synthetic) { toast("Wait for the terrain to load."); return; }
+    if (data.partial) { toast("Wait until all imagery tiles are in."); return; }
+    const [W, H] = exportSize("png");
+    const keepW = glc.width, keepH = glc.height;
+    recording = true;
+    let blob = null;
+    try {
+      glc.width = W; glc.height = H;
+      renderTo({ vig: 0.45 });
+      const out = document.createElement("canvas");
+      out.width = W; out.height = H;
+      const ctx = out.getContext("2d");
+      ctx.drawImage(glc, 0, 0);
+      drawCaption(ctx, W, H);
+      blob = await new Promise((res) => out.toBlob(res, "image/png"));
+    } finally {
+      glc.width = keepW; glc.height = keepH;
+      recording = false;
+      requestRender();
+    }
+    if (blob) await deliver(blob, `${fileStem()}${g("view") === "3d" ? "-3d" : ""}.png`);
+  }
+
+  function pickMime() {
+    if (typeof MediaRecorder === "undefined") return null;
+    for (const m of ["video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"]) {
+      try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) { }
+    }
+    return "";
+  }
+
+  const DURS = [5, 10, 15, 30];
+
+  function clipSeconds() { const d = num("dur"); return DURS.includes(d) ? d : 10; }
+
+  function setClipMenu(open) {
+    $("clipMenu").classList.toggle("on", open);
+    $("clipBtn").setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  async function recordClip() {
+    if (recStop) { recStop(); return; }
+    if (recording) return;
+    if (!data || data.synthetic) { toast("Wait for the terrain to load."); return; }
+    if (data.partial) { toast("Wait until all imagery tiles are in."); return; }
+    const mime = pickMime();
+    if (mime === null || !HTMLCanvasElement.prototype.captureStream) { toast("This browser cannot record a canvas. Use Chrome, Firefox or Safari."); return; }
+    const orbit = g("clip") === "orbit";
+    const [W, H] = exportSize("clip");
+    const seconds = clipSeconds();
+    const keepW = glc.width, keepH = glc.height;
+    const out = document.createElement("canvas");
+    out.width = W; out.height = H;
+    const ctx = out.getContext("2d");
+    const stream = out.captureStream(30);
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 12000000 }) : new MediaRecorder(stream);
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise((res) => { rec.onstop = res; });
+    let stopNow = false, left = -1;
+    recStop = () => { stopNow = true; };
+    recording = true;
+    setClipMenu(false);
+    $("clipBtn").disabled = true;
+    $("recClip").classList.add("on");
+    $("recClip").title = "Stop and save the clip (R)";
+    const az0 = num("az"), yaw0 = cam.yaw;
+    try {
+      glc.width = W; glc.height = H;
+      const frame = (t) => {
+        const e = 0.5 - 0.5 * Math.cos(Math.PI * t);
+        if (orbit) draw3d(W, H, { yaw: yaw0 + 360 * t, pitch: cam.pitch + 6 * Math.sin(2 * Math.PI * t), dist: cam.dist * (1.06 - 0.08 * Math.sin(Math.PI * t)) });
+        else drawArt(null, W, H, { az: az0 + 360 * e, vig: 0.45 });
+        ctx.drawImage(glc, 0, 0, W, H);
+        drawCaption(ctx, W, H);
+      };
+      frame(0);
+      rec.start(500);
+      const start = performance.now();
+      await new Promise((res) => {
+        const tick = () => {
+          const t = (performance.now() - start) / (seconds * 1000);
+          if (t >= 1 || stopNow) { frame(Math.min(t, 1)); res(); return; }
+          frame(t);
+          $("recProg").style.width = (t * 100).toFixed(1) + "%";
+          const s = Math.ceil(seconds * (1 - t));
+          if (s !== left) { left = s; $("recLabel").textContent = `Stop · ${s} s`; }
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      recStop = null;
+      $("recLabel").textContent = "Saving";
+      await sleep(150);
+      rec.stop();
+      await stopped;
+      const type = rec.mimeType || mime || "video/webm";
+      const blob = new Blob(chunks, { type });
+      glc.width = keepW; glc.height = keepH;
+      recording = false;
+      requestRender();
+      await deliver(blob, `${fileStem()}-${orbit ? "orbit" : "sweep"}.${type.indexOf("mp4") >= 0 ? "mp4" : "webm"}`);
+    } catch (e) {
+      toast("The recording failed: " + esc(e && e.message ? e.message : String(e)));
+    } finally {
+      recording = false;
+      recStop = null;
+      $("clipBtn").disabled = false;
+      $("recClip").classList.remove("on");
+      $("recClip").title = "Record a clip (R)";
+      $("recLabel").textContent = "Record clip";
+      $("recProg").style.width = "0";
+      if (glc.width !== keepW || glc.height !== keepH) { glc.width = keepW; glc.height = keepH; }
+      requestRender();
+    }
+  }
+
+  let map = null, mapReady = null;
+  const FRAME_FRAC = 0.66;
+
+  function loadAsset(path, kind) {
+    return new Promise((res, rej) => {
+      const el = document.createElement(kind === "css" ? "link" : "script");
+      if (kind === "css") { el.rel = "stylesheet"; el.href = fused.rawUrl(path); } else { el.src = fused.rawUrl(path); }
+      el.onload = res;
+      el.onerror = () => rej(new Error("Cannot load " + path));
+      document.head.appendChild(el);
+    });
+  }
+
+  function frameBox() {
+    const el = $("stageInner");
+    const bw = (el.clientWidth - 40) * FRAME_FRAC, bh = (el.clientHeight - 150) * FRAME_FRAC;
+    const a = aspect();
+    let w = bw, h = w / a;
+    if (h > bh) { h = bh; w = h * a; }
+    return [w, h];
+  }
+  function mapPadding() {
+    const st = $("stage").getBoundingClientRect(), si = $("stageInner").getBoundingClientRect();
+    return { top: 0, left: 0, right: Math.max(0, st.right - si.right), bottom: Math.max(0, st.bottom - si.bottom) };
+  }
+  function zoomForSpan(lat, spanKm) {
+    const fb = frameBox();
+    return Math.log2(40075016.686 * Math.cos(lat * Math.PI / 180) * Math.max(fb[0], fb[1]) / (512 * spanKm * 1000));
+  }
+  function spanAtMap() {
+    const c = map.getCenter();
+    const mpp = 40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * Math.pow(2, map.getZoom()));
+    const fb = frameBox();
+    return Math.max(fb[0], fb[1]) * mpp / 1000;
+  }
+  function updateMapFrame() {
+    const fb = frameBox();
+    const fr = $("mapFrame");
+    fr.style.width = fb[0] + "px";
+    fr.style.height = fb[1] + "px";
+    if (!map) return;
+    const s = spanAtMap();
+    const a = aspect();
+    const lbl = $("mapLbl");
+    const ok = s >= 2 && s <= 50;
+    const w = a >= 1 ? s : s * a, h = a >= 1 ? s / a : s;
+    lbl.textContent = ok ? `${fmtKm(w)} km × ${fmtKm(h)} km` : s < 2 ? "Zoom out: the smallest area is 2 km" : "Zoom in: the largest area is 50 km";
+    lbl.classList.toggle("warn", !ok);
+    $("mapUse").disabled = !ok;
+  }
+
+  function ensureMap() {
+    if (mapReady) return mapReady;
+    mapReady = (async () => {
+      await Promise.all([loadAsset("vendor/maplibre-gl.css", "css"), loadAsset("vendor/maplibre-gl.js", "js")]);
+      const lat = num("lat"), lon = num("lon");
+      map = new maplibregl.Map({
+        container: "map",
+        style: {
+          version: 8,
+          sources: {
+            sat: { type: "raster", tileSize: 256, maxzoom: 18, tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"], attribution: "Imagery © Esri, Maxar, Earthstar Geographics" },
+            ref: { type: "raster", tileSize: 256, maxzoom: 18, tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"] }
+          },
+          layers: [
+            { id: "bg", type: "background", paint: { "background-color": "#05070b" } },
+            { id: "sat", type: "raster", source: "sat", paint: { "raster-saturation": -0.15, "raster-brightness-max": 0.9 } },
+            { id: "ref", type: "raster", source: "ref", paint: { "raster-opacity": 0.85 } }
+          ]
+        },
+        center: [lon, lat],
+        zoom: zoomForSpan(lat, num("span")),
+        attributionControl: { compact: true },
+        dragRotate: false,
+        pitchWithRotate: false
+      });
+      map.touchZoomRotate.disableRotation();
+      map.setPadding(mapPadding());
+      map.on("move", updateMapFrame);
+      updateMapFrame();
+      await new Promise((res) => map.once("load", res));
+      updateMapFrame();
+    })();
+    return mapReady;
+  }
+
+  async function syncMap() {
+    try { await ensureMap(); } catch (e) { mapReady = null; toast("The map did not load: " + esc(e.message)); return; }
+    map.resize();
+    const lat = num("lat"), lon = num("lon");
+    map.jumpTo({ center: [lon, lat], zoom: zoomForSpan(lat, num("span")), padding: mapPadding() });
+    updateMapFrame();
+  }
+
+  let lastView = "relief";
+  $("mapUse").addEventListener("click", async () => {
+    if (!map) return;
+    const c = map.getCenter().wrap();
+    const span = Math.round(Math.min(50, Math.max(2, spanAtMap())) * 10) / 10;
+    const lat = Math.round(c.lat * 1e4) / 1e4, lon = Math.round(c.lng * 1e4) / 1e4;
+    setP({ lat, lon, span, place: "custom", name: "Custom area", ct: "", view: lastView, date: "", ...(g("comp") === "single" ? { comp: "lc" } : {}) });
+    try {
+      const r = await fused.runPython("geocode.py", { lat: String(lat), lon: String(lon), reverse: "true" }, { key: "reverse" });
+      if (r && r.length && g("lat") === String(lat) && g("lon") === String(lon)) setP({ name: r[0].name });
+    } catch (e) { }
+  });
+  $("mapCancel").addEventListener("click", () => setP({ view: lastView }));
+  $("pickMap").addEventListener("click", () => setP({ view: "map" }));
+
+  function closePops() {
+    $("results").classList.remove("on");
+    $("placesPop").classList.remove("on");
+    $("placesBtn").classList.remove("on");
+    $("placesBtn").setAttribute("aria-expanded", "false");
+  }
+
+  let searchTimer = 0, searchSel = -1, searchItems = [];
+  const qEl = $("q"), resEl = $("results");
+  function renderResults() {
+    if (!searchItems.length) { resEl.innerHTML = `<div class="empty">No place found.</div>`; return; }
+    resEl.innerHTML = searchItems.map((r, i) => `<button role="option" data-i="${i}" class="${i === searchSel ? "sel" : ""}"><span class="kind">${ICONS.peak}</span><span class="grow"><div class="n">${esc(r.name)}</div><div class="d">${esc(r.detail || "")}</div></span><span class="km">${fmtKm(r.span)} km</span></button>`).join("");
+  }
+  function pickResult(r) {
+    closePops();
+    qEl.value = "";
+    qEl.blur();
+    setP({ lat: r.lat, lon: r.lon, span: r.span, name: r.name, ct: "", place: "search", date: "", view: g("view") === "map" ? "relief" : g("view"), ...(g("comp") === "single" ? { comp: "lc" } : {}) });
+  }
+  qEl.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    const q = qEl.value.trim();
+    if (q.length < 2) { resEl.classList.remove("on"); return; }
+    searchTimer = setTimeout(async () => {
+      $("placesPop").classList.remove("on");
+      resEl.classList.add("on");
+      resEl.innerHTML = `<div class="empty"><div class="skel" style="width:70%"></div></div>`;
+      try {
+        searchItems = await fused.runPython("geocode.py", { q }, { key: "search" });
+        searchSel = searchItems.length ? 0 : -1;
+        if (qEl.value.trim() === q) renderResults();
+      } catch (e) {
+        resEl.innerHTML = `<div class="empty">The search did not work. Try again.</div>`;
+      }
+    }, 350);
+  });
+  qEl.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (!searchItems.length) return;
+      e.preventDefault();
+      searchSel = (searchSel + (e.key === "ArrowDown" ? 1 : -1) + searchItems.length) % searchItems.length;
+      renderResults();
+    } else if (e.key === "Enter") {
+      if (searchItems[searchSel]) pickResult(searchItems[searchSel]);
+    } else if (e.key === "Escape") {
+      closePops();
+      qEl.blur();
+    }
+  });
+  resEl.addEventListener("mousedown", (e) => {
+    const b = e.target.closest("button[data-i]");
+    if (b) { e.preventDefault(); pickResult(searchItems[+b.dataset.i]); }
+  });
+  qEl.addEventListener("blur", () => setTimeout(() => resEl.classList.remove("on"), 150));
+
+  function renderPlaces() {
+    let html = "";
+    for (const kind of Object.keys(KIND_NAMES)) {
+      const list = PLACES.filter((p) => p.kind === kind);
+      if (!list.length) continue;
+      html += `<div class="grp">${KIND_NAMES[kind]}</div>`;
+      html += list.map((p) => `<button role="option" data-id="${p.id}" class="${p.id === g("place") ? "on" : ""}"><span class="kind">${ICONS[p.kind]}</span><span class="grow"><div class="n">${esc(p.name)}</div><div class="d">${esc(p.where)}</div></span><span class="km">${p.span} km</span></button>`).join("");
+    }
+    $("placesPop").innerHTML = html;
+  }
+  function togglePlaces(force) {
+    const pop = $("placesPop");
+    const open = force != null ? force : !pop.classList.contains("on");
+    closePops();
+    if (open) {
+      renderPlaces();
+      pop.classList.add("on");
+      $("placesBtn").classList.add("on");
+      $("placesBtn").setAttribute("aria-expanded", "true");
+    }
+  }
+  $("placesBtn").addEventListener("click", (e) => { e.stopPropagation(); togglePlaces(); });
+  $("placesPop").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-id]");
+    if (!b) return;
+    const p = PLACES.find((x) => x.id === b.dataset.id);
+    closePops();
+    const upd = { place: p.id, lat: p.lat, lon: p.lon, span: p.span, name: p.name, ct: "", date: "", season: p.season || "summer" };
+    if (g("comp") === "single") upd.comp = "lc";
+    if (g("view") === "map") upd.view = "relief";
+    setP(upd);
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest("#placesPop, #placesBtn, #results, .search")) closePops(); });
+
+  $("ratios").innerHTML = RATIOS.map((r) => {
+    const a = r.r || 1.5;
+    const w = a >= 1 ? 18 : Math.round(18 * a), h = a >= 1 ? Math.round(18 / a) : 18;
+    const icon = r.id === "free" ? `<i style="width:16px;height:12px;border-style:dashed"></i>` : `<i style="width:${w}px;height:${h}px"></i>`;
+    return `<button class="ratio" data-v="${r.id}" title="${esc(r.title)}"><span style="height:20px;display:grid;place-items:center">${icon}</span>${r.label}</button>`;
+  }).join("");
+  $("ratios").addEventListener("click", (e) => {
+    const b = e.target.closest(".ratio");
+    if (!b) return;
+    const upd = { ratio: b.dataset.v };
+    if (b.dataset.v === "free") {
+      const inner = $("stageInner");
+      upd.rf = Math.min(2.5, Math.max(0.4, (inner.clientWidth - 80) / Math.max(1, inner.clientHeight - 180))).toFixed(2);
+    }
+    setP(upd);
+  });
+
+  $("looks").innerHTML = Object.entries(LOOKS).map(([k, L]) => `<button class="look" data-v="${k}" title="${L.name}"><i style="background:${L.swatch}"></i>${L.name}</button>`).join("");
+  $("looks").addEventListener("click", (e) => {
+    const b = e.target.closest(".look");
+    if (!b) return;
+    const L = LOOKS[b.dataset.v];
+    setP({ look: b.dataset.v, glow: L.glow, sat: L.sat });
+  });
+
+  $("lightPresets").innerHTML = LIGHTS.map((l) => `<button class="preset" data-v="${l.id}" title="${l.name}">${l.icon}<span style="overflow:hidden;text-overflow:ellipsis">${l.name}</span></button>`).join("");
+  $("lightPresets").addEventListener("click", (e) => {
+    const b = e.target.closest(".preset");
+    if (!b) return;
+    setP({ multi: "0", ...LIGHTS.find((l) => l.id === b.dataset.v).set() });
+  });
+
+  function bindSeg(id, key) {
+    $(id).addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-v]");
+      if (b) setP({ [key]: b.dataset.v });
+    });
+  }
+  bindSeg("layerSeg", "layer");
+  bindSeg("compSeg", "comp");
+  bindSeg("altSeg", "alt");
+  bindSeg("strSeg", "str");
+  bindSeg("exagSeg", "exag");
+  bindSeg("clipSeg", "clip");
+  bindSeg("durSeg", "dur");
+  document.querySelectorAll("#viewSwitch button").forEach((b) => b.addEventListener("click", () => setP({ view: b.dataset.view })));
+
+  const SLIDERS = { az: (v) => `${Math.round(v)}°`, alt: (v) => `${Math.round(v)}°`, str: (v) => `${Math.round(v * 100)}%`, exag: (v) => `${v.toFixed(1)}×`, glow: (v) => `${Math.round(v * 100)}%`, sat: (v) => `${Math.round(v * 100)}%`, exp: (v) => v.toFixed(2) };
+  for (const k of Object.keys(SLIDERS)) $(k).addEventListener("input", (e) => setP({ [k]: e.target.value }));
+  for (const [k, id] of [["multi", "multi"], ["shadow", "shadow"], ["cap", "capSwitch"]]) $(id).addEventListener("click", () => setP({ [k]: on(k) ? "0" : "1" }));
+  for (const k of ["season", "quality", "out"]) $(k).addEventListener("change", (e) => setP({ [k]: e.target.value, ...(k === "season" ? { date: "" } : {}) }));
+  for (const k of ["start", "end"]) $(k).addEventListener("change", (e) => { if (e.target.value) setP({ [k]: e.target.value, season: "custom", date: "" }); });
+
+  document.querySelectorAll("#cap [contenteditable]").forEach((el) => {
+    el.addEventListener("input", () => {
+      const k = el.dataset.k;
+      const v = el.textContent.replace(/\s+/g, " ").trim();
+      setP({ [k]: v === autoCaption()[k] ? "" : v });
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); el.blur(); }
+      e.stopPropagation();
+    });
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text").replace(/\s+/g, " ");
+      document.execCommand("insertText", false, text);
+    });
+    el.addEventListener("blur", () => { if (!el.textContent.trim()) { setP({ [el.dataset.k]: "" }); updateTexts(); } });
+  });
+  $("capNote").addEventListener("click", (e) => { if (e.target.id === "capReset") { setP({ ct: "", cs: "", cc: "" }); updateTexts(); } });
+
+  const dial = $("dial");
+  $("dialTicks").innerHTML = Array.from({ length: 24 }, (_, i) => {
+    if (i % 6 === 0) return "";
+    const a = i * 15 * Math.PI / 180, r1 = i % 2 === 0 ? 41 : 43, r2 = 47;
+    return `<line class="tick" x1="${54 + Math.sin(a) * r1}" y1="${54 - Math.cos(a) * r1}" x2="${54 + Math.sin(a) * r2}" y2="${54 - Math.cos(a) * r2}" />`;
+  }).join("");
+  function dialFromEvent(e) {
+    const r = dial.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * 108 - 54, y = (e.clientY - r.top) / r.height * 108 - 54;
+    setP({ az: Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360) });
+  }
+  dial.addEventListener("pointerdown", (e) => { dial.setPointerCapture(e.pointerId); dialFromEvent(e); });
+  dial.addEventListener("pointermove", (e) => { if (dial.hasPointerCapture(e.pointerId)) dialFromEvent(e); });
+  dial.addEventListener("wheel", (e) => { e.preventDefault(); const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; setP({ az: Math.round((num("az") + Math.sign(d) * 5 + 360) % 360) }); }, { passive: false });
+  dial.addEventListener("keydown", (e) => {
+    const step = e.shiftKey ? 15 : 5;
+    if (e.key === "ArrowLeft" || e.key === "ArrowDown") { setP({ az: (num("az") - step + 360) % 360 }); e.preventDefault(); e.stopPropagation(); }
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") { setP({ az: (num("az") + step) % 360 }); e.preventDefault(); e.stopPropagation(); }
+  });
+  function updateDial() {
+    const az = num("az");
+    const a = az * Math.PI / 180, r = 45;
+    const x = 54 + Math.sin(a) * r, y = 54 - Math.cos(a) * r;
+    for (const id of ["dialSun", "dialGlow"]) { $(id).setAttribute("cx", x); $(id).setAttribute("cy", y); }
+    $("dialRay").setAttribute("x2", 54 + Math.sin(a) * (r - 8));
+    $("dialRay").setAttribute("y2", 54 - Math.cos(a) * (r - 8));
+    $("dialVal").textContent = `${Math.round(az)}°`;
+    $("dialVal2").textContent = `${compass(az)} · ${Math.round(num("alt"))}° high`;
+    dial.setAttribute("aria-valuenow", String(Math.round(az)));
+    dial.setAttribute("aria-valuetext", `Light from ${compass(az)}, ${Math.round(az)} degrees`);
+  }
+
+  const pointers = new Map();
+  function spread() {
+    const [a, b] = pointers.values();
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function zoom(f) { cam.dist = Math.max(0.6, Math.min(4, cam.dist * f)); }
+  glc.addEventListener("pointerdown", (e) => {
+    if (g("view") !== "3d" || recording || e.button > 0) return;
+    glc.setPointerCapture(e.pointerId);
+    glc.classList.add("drag");
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  });
+  glc.addEventListener("pointermove", (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p || recording) return;
+    if (pointers.size === 1) {
+      cam.yaw -= (e.clientX - p.x) * 0.35;
+      cam.pitch = Math.max(8, Math.min(85, cam.pitch + (e.clientY - p.y) * 0.25));
+    }
+    const before = pointers.size === 2 ? spread() : 0;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    if (before) zoom(before / Math.max(spread(), 1));
+    requestRender();
+  });
+  const endDrag = (e) => {
+    if (!pointers.delete(e.pointerId) || pointers.size) return;
+    glc.classList.remove("drag");
+    setP({ yaw: Math.round(((cam.yaw % 360) + 360) % 360), pitch: Math.round(cam.pitch), dist: cam.dist.toFixed(2) });
+  };
+  glc.addEventListener("pointerup", endDrag);
+  glc.addEventListener("pointercancel", endDrag);
+  glc.addEventListener("lostpointercapture", endDrag);
+  let wheelTimer = 0;
+  glc.addEventListener("wheel", (e) => {
+    if (g("view") !== "3d") return;
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoom(Math.exp(dy * 0.0012));
+    requestRender();
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => setP({ dist: cam.dist.toFixed(2) }), 250);
+  }, { passive: false });
+
+  $("savePng").addEventListener("click", exportPng);
+  $("recClip").addEventListener("click", recordClip);
+  $("clipBtn").addEventListener("click", () => setClipMenu(!$("clipMenu").classList.contains("on")));
+  document.addEventListener("click", (e) => { if (!e.target.closest("#clipMenu, #clipBtn")) setClipMenu(false); });
+  $("hidePanel").addEventListener("click", () => setP({ panel: "0" }));
+  $("showPanel").addEventListener("click", () => setP({ panel: "1" }));
+  $("helpBtn").addEventListener("click", () => $("help").classList.add("on"));
+  $("help").addEventListener("click", () => $("help").classList.remove("on"));
+  $("fine").addEventListener("toggle", () => { const v = $("fine").open ? "1" : "0"; if (g("fine") !== v) setP({ fine: v }); });
+
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if ((t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable)) || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    const layers = { "1": "true", "2": "false", "3": "ndvi", "4": "relief" };
+    if (k === "ArrowLeft" || k === "ArrowRight") { setP({ az: Math.round((num("az") + (k === "ArrowLeft" ? -5 : 5) + 360) % 360) }); e.preventDefault(); }
+    else if (k === "ArrowUp" || k === "ArrowDown") { setP({ alt: Math.max(3, Math.min(85, num("alt") + (k === "ArrowUp" ? 2 : -2))) }); e.preventDefault(); }
+    else if (k === "[" || k === "]") setP({ exag: Math.max(0.5, Math.min(5, num("exag") + (k === "[" ? -0.1 : 0.1))).toFixed(1) });
+    else if (layers[k]) setP({ layer: layers[k] });
+    else if (k === "l" || k === "L") { const ks = Object.keys(LOOKS); const nx = ks[(ks.indexOf(g("look")) + 1) % ks.length]; setP({ look: nx, glow: LOOKS[nx].glow, sat: LOOKS[nx].sat }); }
+    else if (k === "v" || k === "V") setP({ view: "relief" });
+    else if (k === "t" || k === "T") setP({ view: "3d" });
+    else if (k === "m" || k === "M") setP({ view: "map" });
+    else if (k === "p" || k === "P") { if (!on("panel")) setP({ panel: "1" }); togglePlaces(); }
+    else if (k === "s" || k === "S") exportPng();
+    else if (k === "r" || k === "R") recordClip();
+    else if (k === "h" || k === "H") setP({ panel: on("panel") ? "0" : "1" });
+    else if (k === "/") { e.preventDefault(); if (!on("panel")) setP({ panel: "1" }); qEl.focus(); }
+    else if (k === "?") $("help").classList.toggle("on");
+    else if (k === "Escape") { $("help").classList.remove("on"); closePops(); setClipMenu(false); }
+  });
+
+  let scenesKey = "";
+  async function loadScenes() {
+    const args = { lat: g("lat"), lon: g("lon"), span: g("span"), aspect: aspect().toFixed(4), season: g("season"), start: g("start"), end: g("end") };
+    const key = JSON.stringify(args);
+    if (key === scenesKey) { markScenes(); return; }
+    scenesKey = key;
+    const box = $("scenes");
+    box.innerHTML = Array.from({ length: 6 }, () => `<span class="skel"></span>`).join("");
+    $("sceneHead").textContent = "Searching scenes";
+    try {
+      const r = await fused.runPython("scenes.py", args, { key: "scenes" });
+      if (scenesKey !== key) return;
+      $("sceneHead").textContent = r.scenes.length ? `${r.scenes.length} dates from ${fmtDate(r.start)} to ${fmtDate(r.end)}. The percentage is the cloud cover.` : "No scene in this date range. Select a longer date range.";
+      box.innerHTML = r.scenes.map((s) => `<button class="scene${s.cloud < 10 ? " clear" : ""}" data-d="${esc(s.date)}" title="${esc(fmtDate(s.date))}: ${Number(s.tiles)} tile(s), ${Number(s.cloud)}% cloud">${esc(fmtDate(s.date, true))}<em>${Math.round(Number(s.cloud))}%</em></button>`).join("");
+      if (!g("date") && r.scenes.length) setP({ date: r.scenes.reduce((a, b) => (b.cloud < a.cloud ? b : a)).date });
+      markScenes();
+    } catch (e) {
+      if (scenesKey !== key) return;
+      scenesKey = "";
+      $("sceneHead").textContent = "The scene search did not work.";
+      box.innerHTML = "";
+    }
+  }
+  function markScenes() {
+    const d = g("date");
+    document.querySelectorAll("#scenes .scene").forEach((b) => {
+      b.classList.toggle("on", b.dataset.d === d);
+      if (b.dataset.d === d) b.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+  }
+  $("scenes").addEventListener("click", (e) => {
+    const b = e.target.closest(".scene");
+    if (b) setP({ date: b.dataset.d, comp: "single" });
+  });
+
+  function markSeg(id, value) {
+    document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle("on", Math.abs(parseFloat(b.dataset.v) - value) < 0.001));
+  }
+
+  function applyParams() {
+    const view = g("view");
+    document.body.classList.toggle("view-3d", view === "3d");
+    document.body.classList.toggle("view-map", view === "map");
+    document.body.classList.toggle("panel-off", !on("panel"));
+    document.body.classList.toggle("cap-on", on("cap"));
+    document.querySelectorAll("#viewSwitch button").forEach((b) => { b.classList.toggle("on", b.dataset.view === view); b.setAttribute("aria-selected", b.dataset.view === view ? "true" : "false"); });
+    document.querySelectorAll("#layerSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === g("layer")));
+    document.querySelectorAll("#compSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === g("comp")));
+    document.querySelectorAll(".ratio").forEach((b) => b.classList.toggle("on", b.dataset.v === g("ratio")));
+    document.querySelectorAll(".look").forEach((b) => b.classList.toggle("on", b.dataset.v === g("look")));
+    markSeg("altSeg", num("alt"));
+    markSeg("strSeg", num("str"));
+    markSeg("exagSeg", num("exag"));
+    markSeg("durSeg", clipSeconds());
+    document.querySelectorAll("#clipSeg button").forEach((b) => b.classList.toggle("on", b.dataset.v === g("clip")));
+    $("clipInfo").textContent = `${g("clip") === "orbit" ? "Orbit" : "Sweep"} · ${clipSeconds()} s`;
+    const lp = LIGHTS.find((l) => { const s = l.set(); return s.az === num("az") && s.alt === num("alt") && s.str === num("str"); });
+    document.querySelectorAll(".preset").forEach((b) => b.classList.toggle("on", !!lp && b.dataset.v === lp.id));
+    for (const [k, f] of Object.entries(SLIDERS)) {
+      const el = $(k), v = num(k);
+      if (document.activeElement !== el) el.value = String(v);
+      el.style.setProperty("--p", ((v - +el.min) / (+el.max - +el.min) * 100) + "%");
+      $(k + "V").textContent = f(v);
+    }
+    for (const [k, id] of [["multi", "multi"], ["shadow", "shadow"], ["cap", "capSwitch"]]) $(id).setAttribute("aria-checked", on(k) ? "true" : "false");
+    $("capSwitch").classList.toggle("on", on("cap"));
+    for (const k of ["season", "quality", "out"]) $(k).value = g(k);
+    $("start").value = g("start");
+    $("end").value = g("end");
+    $("customRow").style.display = g("season") === "custom" ? "" : "none";
+    if ($("fine").open !== on("fine")) $("fine").open = on("fine");
+    const single = g("comp") === "single";
+    $("sceneBox").style.display = single ? "" : "none";
+    if (single) loadScenes();
+    $("lightInfo").textContent = lp ? lp.name : "Custom";
+    updateDial();
+    cam.yaw = num("yaw"); cam.pitch = num("pitch"); cam.dist = num("dist");
+    updateTexts();
+    if (view === "map") syncMap();
+    else lastView = view;
+    if (!(single && !g("date"))) load();
+    requestRender();
+  }
+
+  try {
+    if (!gl) throw new Error("WebGL 2 is not available in this browser.");
+    initGL();
+  } catch (e) {
+    document.body.classList.add("loading");
+    $("loadTitle").textContent = "This browser cannot draw the terrain";
+    $("loadErrMsg").textContent = e.message;
+    $("loadErr").classList.add("on");
+    $("retry").style.display = "none";
+    return;
+  }
+  $("brandIcon").src = fused.rawUrl("icon.svg");
+  new ResizeObserver(() => { if (map && g("view") === "map") { map.resize(); map.setPadding(mapPadding()); updateMapFrame(); } requestRender(); }).observe($("stageInner"));
+  new ResizeObserver(() => document.body.style.setProperty("--sheet-h", $("panel").offsetHeight + "px")).observe($("panel"));
+  new MutationObserver(requestRender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-fused-theme-name", "style"] });
+  P.onChange(applyParams);
+  applyParams();
+})();
+</script>
+</body>
+</html>

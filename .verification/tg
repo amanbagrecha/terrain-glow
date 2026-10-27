@@ -1,0 +1,2 @@
+#!/bin/sh
+exec uv run --quiet --no-project --with websocket-client python "$(dirname "$0")/control.py" "$@"
